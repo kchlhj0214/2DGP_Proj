@@ -9,11 +9,9 @@ class Camera:
         self.height_m = height_m
         self.x = self.y = 0.0
 
-    def follow(self, target, arena):
-        limit_x = max(0.0, arena.radius - self.width_m / 2)
-        limit_y = max(0.0, arena.radius - self.height_m / 2)
-        self.x = max(-limit_x, min(limit_x, target.x))
-        self.y = max(-limit_y, min(limit_y, target.y))
+    def follow(self, target):
+        # 이동 가능한 영역과 카메라 범위를 분리해 경계에서도 항상 중앙에 둔다.
+        self.x, self.y = target.x, target.y
 
     def to_screen(self, x, y):
         return (self.width_px / 2 + (x - self.x) * self.pixels_per_meter,

@@ -45,7 +45,7 @@ def handle_events():
 def update():
     if focused:
         game_world.update()
-    camera.follow(player, arena)
+    camera.follow(player)
 
 
 def render():

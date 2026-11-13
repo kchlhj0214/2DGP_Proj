@@ -6,6 +6,6 @@
     {"id": "arena", "viewport_id": "main", "diameter_height_ratio": 1.75, "grid_m": 1.0}
   ],
   "characters": [
-    {"id": "player", "viewport_id": "main", "height_ratio": 0.05, "width_height_ratio": 0.5, "boundary_height_ratio": 0.5, "speed_kmph": 7.0}
+    {"id": "player", "viewport_id": "main", "height_ratio": 0.05, "width_height_ratio": 0.5, "boundary_height_ratio": 0.5, "speed_kmph": 14.0}
   ]
 }

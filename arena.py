@@ -1,6 +1,6 @@
 """원형 경기장. 전달받은 경계 판정용 직사각형을 원 내부로 제한한다."""
 
-from math import ceil, hypot, sqrt
+from math import ceil, floor, hypot, sqrt
 
 import pico2d
 
@@ -38,6 +38,17 @@ class Arena:
 
     def draw(self):
         camera = self.camera
+        # 원 밖에도 월드 좌표에 맞춘 지면을 그리지만 이동 경계는 원 그대로다.
+        left = camera.x - camera.width_m / 2
+        right = camera.x + camera.width_m / 2
+        bottom = camera.y - camera.height_m / 2
+        top = camera.y + camera.height_m / 2
+        for index in range(floor(left / self.grid_m), ceil(right / self.grid_m) + 1):
+            x, _ = camera.to_screen(index * self.grid_m, camera.y)
+            pico2d.draw_line(x, 0, x, camera.height_px, 23, 33, 43)
+        for index in range(floor(bottom / self.grid_m), ceil(top / self.grid_m) + 1):
+            _, y = camera.to_screen(camera.x, index * self.grid_m)
+            pico2d.draw_line(0, y, camera.width_px, y, 23, 33, 43)
         cx, cy = camera.to_screen(0, 0)
         radius_px = round(self.radius * camera.pixels_per_meter)
         pico2d.draw_circle(cx, cy, radius_px, 28, 39, 48, filled=True)

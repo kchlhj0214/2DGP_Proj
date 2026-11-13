@@ -114,7 +114,7 @@ class ScaleTests(unittest.TestCase):
                 game_framework.frame_time = 1 / fps
                 for _ in range(fps * 3):
                     player.update()
-                self.assertAlmostEqual(hypot(player.x, player.y), 7 / 3.6 * 3)
+                self.assertAlmostEqual(hypot(player.x, player.y), 14 / 3.6 * 3)
 
     def test_irregular_frames_and_key_release(self):
         _, player, _ = scene()
@@ -169,15 +169,29 @@ class ScaleTests(unittest.TestCase):
             for y in (bottom, top):
                 self.assertLessEqual(hypot(x, y), arena.radius + 1e-9)
 
-    def test_camera_limits_and_coordinate_roundtrip(self):
+    def test_camera_stays_centered_at_all_boundaries_and_resolutions(self):
+        for width, height in ((1280, 720), (1920, 1080), (1280, 1024)):
+            arena, player, camera = scene(width, height)
+            for step in range(0, 360, 10):
+                angle = step * pi / 180
+                player.x, player.y = player.constrain_position(
+                    1000 * cos(angle), 1000 * sin(angle))
+                camera.follow(player)
+                self.assertEqual(camera.to_screen(player.x, player.y),
+                                 (width / 2, height / 2))
+                left, bottom, right, top = player.get_boundary_bb()
+                for x in (left, right):
+                    for y in (bottom, top):
+                        self.assertLessEqual(hypot(x, y), arena.radius + 1e-9)
+
+    def test_camera_coordinate_roundtrip(self):
         arena, player, camera = scene()
         player.x, player.y = 0, 4
-        camera.follow(player, arena)
+        camera.follow(player)
         self.assertEqual(camera.to_screen(player.x, player.y), (960, 540))
         player.x, player.y = 100, 100
-        camera.follow(player, arena)
-        self.assertEqual(camera.x, 0)  # 가로 시야가 이미 원 전체보다 넓다.
-        self.assertEqual(camera.y, 13.5)
+        camera.follow(player)
+        self.assertEqual((camera.x, camera.y), (100, 100))
         x, y = camera.to_world(*camera.to_screen(3, 5))
         self.assertAlmostEqual(x, 3)
         self.assertAlmostEqual(y, 5)
@@ -203,7 +217,7 @@ class RenderTests(unittest.TestCase):
             raw = capture_png(ROOT / 'shots/arena-center.png', 1280, 720)
             pixel = lambda x, y: tuple(raw[(y * 1280 + x) * 4:(y * 1280 + x) * 4 + 3])
             self.assertEqual(pixel(640, 354), (64, 208, 192))
-            self.assertEqual(pixel(0, 0), (13, 20, 29))
+            self.assertEqual(pixel(1, 1), (13, 20, 29))
             event = pico2d.Event(pico2d.SDL_KEYDOWN)
             event.key = pico2d.SDLK_w
             with patch.object(pico2d, 'get_events', return_value=[event]), \
@@ -212,7 +226,9 @@ class RenderTests(unittest.TestCase):
             game_framework.frame_time = 1 / 60
             for _ in range(60):
                 play_mode.update()
-            self.assertAlmostEqual(play_mode.player.y, 7 / 3.6)
+            self.assertAlmostEqual(play_mode.player.y, 14 / 3.6)
+            self.assertEqual(play_mode.camera.to_screen(play_mode.player.x, play_mode.player.y),
+                             (640, 360))
             with patch.object(pico2d, 'get_events', return_value=[]), \
                  patch.object(pico2d, 'SDL_GetKeyboardFocus', return_value=False):
                 play_mode.handle_events()
@@ -221,9 +237,14 @@ class RenderTests(unittest.TestCase):
             play_mode.update()
             self.assertEqual(play_mode.player.y, y)
             play_mode.player.x, play_mode.player.y = play_mode.player.constrain_position(100, 100)
-            play_mode.camera.follow(play_mode.player, play_mode.arena)
+            play_mode.camera.follow(play_mode.player)
             play_mode.render()
-            capture_png(ROOT / 'shots/arena-boundary.png', 1280, 720)
+            boundary_raw = capture_png(ROOT / 'shots/arena-boundary.png', 1280, 720)
+            def boundary_pixel(x, y):
+                offset = (y * 1280 + x) * 4
+                return tuple(boundary_raw[offset:offset + 3])
+            self.assertEqual(boundary_pixel(640, 354), (64, 208, 192))
+            self.assertIn(boundary_pixel(1278, 1), ((13, 20, 29), (23, 33, 43)))
             # 종료 이벤트가 프레임워크에 전달되는지도 확인한다.
             game_framework.running = True
             with patch.object(pico2d, 'get_events', return_value=[pico2d.Event(pico2d.SDL_QUIT)]):
