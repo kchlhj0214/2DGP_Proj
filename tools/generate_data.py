@@ -12,7 +12,7 @@ def validate(data):
         'viewports': {'id', 'height_m'},
         'arenas': {'id', 'viewport_id', 'diameter_height_ratio', 'grid_m'},
         'characters': {'id', 'viewport_id', 'height_ratio',
-                       'width_height_ratio', 'speed_kmph'},
+                       'width_height_ratio', 'boundary_height_ratio', 'speed_kmph'},
     }
     if set(data) != set(schemas):
         raise ValueError('시트 종류가 올바르지 않습니다.')
@@ -36,6 +36,9 @@ def validate(data):
     for row in data['arenas'] + data['characters']:
         if row['viewport_id'] not in viewports:
             raise ValueError('존재하지 않는 화면 참조')
+    for row in data['characters']:
+        if row['boundary_height_ratio'] > 1:
+            raise ValueError('경계 판정 높이는 전체 히트박스 높이를 넘을 수 없습니다.')
     required = {'viewports': 'main', 'arenas': 'arena', 'characters': 'player'}
     for name, identifier in required.items():
         if identifier not in {row['id'] for row in data[name]}:

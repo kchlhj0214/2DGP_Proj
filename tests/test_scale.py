@@ -138,6 +138,37 @@ class ScaleTests(unittest.TestCase):
                 for dy in (-player.height / 2, player.height / 2):
                     self.assertLessEqual(hypot(x + dx, y + dy), arena.radius + 1e-9)
 
+    def test_lower_half_stays_inside_while_upper_half_can_cross(self):
+        arena, player, _ = scene()
+        self.assertAlmostEqual(player.boundary_height, player.height / 2)
+        for step in range(360):
+            angle = step * pi / 180
+            player.x, player.y = player.constrain_position(
+                1000 * cos(angle), 1000 * sin(angle))
+            left, bottom, right, top = player.get_boundary_bb()
+            self.assertAlmostEqual(top, player.y)
+            for x in (left, right):
+                for y in (bottom, top):
+                    self.assertLessEqual(hypot(x, y), arena.radius + 1e-9)
+        player.x, player.y = player.constrain_position(0, 1000)
+        self.assertGreater(player.get_bb()[3], arena.radius)
+        # 아래쪽은 발밑, 위쪽은 몸의 중앙이 원에 닿아야 한다.
+        self.assertAlmostEqual(hypot(player.width / 2, player.y), arena.radius)
+        player.x, player.y = player.constrain_position(0, -1000)
+        self.assertAlmostEqual(hypot(player.width / 2, player.get_bb()[1]), arena.radius)
+
+    def test_movement_uses_lower_half_at_boundary(self):
+        arena, player, _ = scene()
+        key(player, pico2d.SDL_KEYDOWN, pico2d.SDLK_w)
+        game_framework.frame_time = 1 / 30
+        for _ in range(600):
+            player.update()
+        self.assertGreater(player.get_bb()[3], arena.radius)
+        left, bottom, right, top = player.get_boundary_bb()
+        for x in (left, right):
+            for y in (bottom, top):
+                self.assertLessEqual(hypot(x, y), arena.radius + 1e-9)
+
     def test_camera_limits_and_coordinate_roundtrip(self):
         arena, player, camera = scene()
         player.x, player.y = 0, 4
@@ -171,7 +202,7 @@ class RenderTests(unittest.TestCase):
             play_mode.render()
             raw = capture_png(ROOT / 'shots/arena-center.png', 1280, 720)
             pixel = lambda x, y: tuple(raw[(y * 1280 + x) * 4:(y * 1280 + x) * 4 + 3])
-            self.assertEqual(pixel(640, 360), (64, 208, 192))
+            self.assertEqual(pixel(640, 354), (64, 208, 192))
             self.assertEqual(pixel(0, 0), (13, 20, 29))
             event = pico2d.Event(pico2d.SDL_KEYDOWN)
             event.key = pico2d.SDLK_w
@@ -189,8 +220,7 @@ class RenderTests(unittest.TestCase):
             y = play_mode.player.y
             play_mode.update()
             self.assertEqual(play_mode.player.y, y)
-            play_mode.player.x, play_mode.player.y = play_mode.arena.constrain_box(
-                0, 100, play_mode.player.width, play_mode.player.height)
+            play_mode.player.x, play_mode.player.y = play_mode.player.constrain_position(100, 100)
             play_mode.camera.follow(play_mode.player, play_mode.arena)
             play_mode.render()
             capture_png(ROOT / 'shots/arena-boundary.png', 1280, 720)
