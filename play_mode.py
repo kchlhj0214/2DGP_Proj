@@ -1,4 +1,4 @@
-"""도형으로 방어·패링·광선을 시험하는 근접 전투 훈련 모드."""
+"""숫자 키로 웨이브와 적 구성을 바꾸는 도형 전투 디버그 모드."""
 
 import sys
 
@@ -10,18 +10,20 @@ from arena import Arena
 from camera import Camera
 from game_data import ARENAS, CHARACTERS, VIEWPORTS
 from player import Player
-from combat_data import ENEMIES, SPAWNS, SYSTEMS
+from combat_data import SYSTEMS
 from combat_hud import CombatHUD
-from enemy import MeleeEnemy
+from wave_manager import WaveManager
 
 player = arena = camera = None
 focused = True
 paused = False
 enemies = []
+projectiles = []
+waves = None
 
 
 def init():
-    global player, arena, camera, focused, paused, enemies
+    global player, arena, camera, focused, paused, enemies, projectiles, waves
     game_world.clear()
     viewport = VIEWPORTS['main']
     camera = Camera(pico2d.get_canvas_width(), pico2d.get_canvas_height(), viewport['height_m'])
@@ -29,11 +31,12 @@ def init():
     player = Player(CHARACTERS['player'], viewport, arena, camera)
     game_world.add_object(arena, 0)
     game_world.add_object(player, 1)
-    enemies = [MeleeEnemy(row['id'], ENEMIES[row['enemy_id']], row['x_m'], row['y_m'], player)
-               for row in SPAWNS.values()]
+    enemies, projectiles = [], []
     player.targets = enemies
-    for enemy in enemies:
-        game_world.add_object(enemy, 1)
+    player.projectiles = projectiles
+    waves = WaveManager(player, enemies, projectiles)
+    game_world.add_object(waves, 0)
+    waves.load()
     game_world.add_object(CombatHUD(sys.modules[__name__]), 2)
     focused = True
     paused = False
@@ -56,6 +59,8 @@ def handle_events():
         elif event.type == pico2d.SDL_KEYDOWN and event.key == pico2d.SDLK_r and focused:
             init()
             break
+        elif event.type == pico2d.SDL_KEYDOWN and focused and waves.handle_key(event.key):
+            break
         elif focused and not paused:
             player.handle_event(event)
 
@@ -69,6 +74,10 @@ def update():
             while remaining > 1e-10:
                 game_framework.frame_time = min(remaining, SYSTEMS['main']['step_s'])
                 game_world.update()
+                for projectile in projectiles[:]:
+                    if not projectile.active:
+                        projectiles.remove(projectile)
+                        game_world.remove_object(projectile)
                 remaining -= game_framework.frame_time
         finally:
             game_framework.frame_time = elapsed
@@ -92,7 +101,9 @@ def resume():
 
 
 def finish():
-    global player, arena, camera, enemies
+    global player, arena, camera, enemies, projectiles, waves
     game_world.clear()
     player = arena = camera = None
     enemies = []
+    projectiles = []
+    waves = None
