@@ -28,6 +28,20 @@ def intersects(first, second):
     return True
 
 
+def circle_intersects_polygon(x, y, radius, points):
+    """원과 볼록 다각형의 정확한 가장자리/내부 판정."""
+    crosses = []
+    for start, end in zip(points, points[1:] + points[:1]):
+        dx, dy = end[0] - start[0], end[1] - start[1]
+        length_sq = dx * dx + dy * dy
+        fraction = max(0, min(1, ((x - start[0]) * dx + (y - start[1]) * dy) / length_sq)) if length_sq else 0
+        px, py = start[0] + fraction * dx, start[1] + fraction * dy
+        if (x - px) ** 2 + (y - py) ** 2 <= radius ** 2 + 1e-9:
+            return True
+        crosses.append(dx * (y - start[1]) - dy * (x - start[0]))
+    return all(v >= 0 for v in crosses) or all(v <= 0 for v in crosses)
+
+
 def ray_length(x, y, angle, radius):
     along = x * cos(angle) + y * sin(angle)
     discriminant = along * along + radius * radius - x * x - y * y
