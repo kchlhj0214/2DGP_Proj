@@ -10,10 +10,5 @@
   ],
   "enemies": [
     {"id": "melee", "character_id": "player", "hp": 60, "speed_kmph": 10, "damage": 10, "energy_gain": 10, "stop_m": 1.6, "windup_s": 0.6, "swing_s": 0.25, "recovery_s": 0.8, "sword_length_m": 2, "sword_width_m": 0.25, "sweep_deg": 90}
-  ],
-  "spawns": [
-    {"id": "melee1", "enemy_id": "melee", "x_m": -6, "y_m": 0},
-    {"id": "melee2", "enemy_id": "melee", "x_m": 4, "y_m": 4},
-    {"id": "melee3", "enemy_id": "melee", "x_m": 4, "y_m": -4}
   ]
 }

@@ -246,8 +246,7 @@ class CombatTests(unittest.TestCase):
     def test_data_validation_references_and_invariants(self):
         source = json.loads((ROOT / 'data/combat.json').read_text(encoding='utf-8'))
         scale = json.loads((ROOT / 'data/scale.json').read_text(encoding='utf-8'))
-        for sheet, field, value in (('spawns', 'enemy_id', 'missing'),
-                                    ('enemies', 'character_id', 'missing'),
+        for sheet, field, value in (('enemies', 'character_id', 'missing'),
                                     ('systems', 'energy_max', None),
                                     ('enemies', 'speed_kmph', 20),
                                     ('stages', 'parry_window_s', 2)):

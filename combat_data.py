@@ -44,7 +44,3 @@ ENEMIES = {'melee': {'id': 'melee',
            'sword_width_m': 0.25,
            'sweep_deg': 90}}
 
-SPAWNS = {'melee1': {'id': 'melee1', 'enemy_id': 'melee', 'x_m': -6, 'y_m': 0},
- 'melee2': {'id': 'melee2', 'enemy_id': 'melee', 'x_m': 4, 'y_m': 4},
- 'melee3': {'id': 'melee3', 'enemy_id': 'melee', 'x_m': 4, 'y_m': -4}}
-

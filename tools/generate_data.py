@@ -134,7 +134,6 @@ def validate_combat(data, scale):
         'enemies': {'id', 'character_id', 'hp', 'speed_kmph', 'damage', 'energy_gain',
                     'stop_m', 'windup_s', 'swing_s', 'recovery_s', 'sword_length_m',
                     'sword_width_m', 'sweep_deg'},
-        'spawns': {'id', 'enemy_id', 'x_m', 'y_m'},
     }
     if set(data) != set(schemas):
         raise ValueError('전투 시트 종류가 올바르지 않습니다.')
@@ -179,9 +178,6 @@ def validate_combat(data, scale):
             raise ValueError('존재하지 않는 캐릭터 참조')
         if not system['guard_kmph'] < enemy['speed_kmph'] < characters[enemy['character_id']]['speed_kmph']:
             raise ValueError('기본 방어 < 적 < 일반 이동 속도 관계가 잘못되었습니다.')
-    for spawn in data['spawns']:
-        if spawn['enemy_id'] not in enemies:
-            raise ValueError('존재하지 않는 적 참조')
     return data
 
 
