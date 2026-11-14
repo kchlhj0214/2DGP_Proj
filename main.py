@@ -26,8 +26,16 @@ def main():
     generate()
     import play_mode
 
-    width, height = desktop_size()
-    pico2d.open_canvas(width, height, sync=True, full=True)
+    from game_data import VIEWPORTS
+
+    viewport = VIEWPORTS['main']
+    desktop_width, desktop_height = desktop_size()
+    scale = min(1.0,
+                desktop_width * viewport['desktop_fit_ratio'] / viewport['window_width_px'],
+                desktop_height * viewport['desktop_fit_ratio'] / viewport['window_height_px'])
+    width = int(viewport['window_width_px'] * scale)
+    height = int(viewport['window_height_px'] * scale)
+    pico2d.open_canvas(width, height, sync=True, full=False)
     try:
         game_framework.run(play_mode)
     finally:
