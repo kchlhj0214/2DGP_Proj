@@ -230,7 +230,7 @@ class CombatTests(unittest.TestCase):
         player.combat.fire()
         player.combat.receive(1, enemy, 10, 10)
         self.assertEqual(player.combat.state, 'beam')
-        advance(player, [], .31)
+        advance(player, [], .51)
         player.combat.receive(2, enemy, 100, 10)
         self.assertEqual(player.combat.state, 'dead')
         self.assertIsNone(player.combat.beam)
