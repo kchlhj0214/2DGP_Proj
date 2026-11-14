@@ -1,6 +1,6 @@
 {
   "viewports": [
-    {"id": "main", "height_m": 36.0}
+    {"id": "main", "height_m": 36.0, "window_width_px": 1280, "window_height_px": 720, "desktop_fit_ratio": 0.85}
   ],
   "arenas": [
     {"id": "arena", "viewport_id": "main", "diameter_height_ratio": 1.75, "grid_m": 1.0}

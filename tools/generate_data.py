@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def validate(data):
     schemas = {
-        'viewports': {'id', 'height_m'},
+        'viewports': {'id', 'height_m', 'window_width_px', 'window_height_px', 'desktop_fit_ratio'},
         'arenas': {'id', 'viewport_id', 'diameter_height_ratio', 'grid_m'},
         'characters': {'id', 'viewport_id', 'height_ratio',
                        'width_height_ratio', 'boundary_height_ratio', 'speed_kmph'},
@@ -33,6 +33,11 @@ def validate(data):
                 if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value < float('inf'):
                     raise ValueError(f'{name}.{key}: 양의 유한 수가 필요합니다.')
     viewports = {row['id'] for row in data['viewports']}
+    for row in data['viewports']:
+        if row['desktop_fit_ratio'] >= 1:
+            raise ValueError('창은 바탕화면보다 작게 표시해야 합니다.')
+        if any(not isinstance(row[field], int) for field in ('window_width_px', 'window_height_px')):
+            raise ValueError('창의 가로와 세로는 정수 픽셀이어야 합니다.')
     for row in data['arenas'] + data['characters']:
         if row['viewport_id'] not in viewports:
             raise ValueError('존재하지 않는 화면 참조')
