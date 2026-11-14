@@ -100,3 +100,8 @@ class MeleeEnemy:
         pico2d.draw_rectangle(x1, y2 + 4, x2, y2 + 7, 64, 40, 43, filled=True)
         pico2d.draw_rectangle(x1, y2 + 4, x1 + (x2 - x1) * self.hp / self.data['hp'],
                               y2 + 7, 237, 116, 113, filled=True)
+        if self.state in ('windup', 'swing'):
+            draw_sector(self.x, self.y, self.angle, self.data['sword_length_m'],
+                        radians(self.data['sweep_deg']), camera, (216, 138, 70))
+        if self.state == 'swing':
+            draw_polygon(self.sword_polygon(), camera, (255, 238, 146))
