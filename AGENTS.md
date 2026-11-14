@@ -8,7 +8,8 @@
 - 위치와 히트박스는 m, 시간은 s, 속도는 m/s로 계산한다.
   km/h 설정은 m/s로 바꾸고 `game_framework.frame_time`을 곱한다.
   픽셀 환산은 Camera를 통해 렌더링 단계에서만 한다.
-- 수치는 `data/scale.json`이 원본이다. 생성된 `game_data.py`는 직접 수정하지 않는다.
+- 수치는 `data/scale.json`과 `data/combat.json`이 원본이다.
+  생성된 `game_data.py`, `combat_data.py`는 직접 수정하지 않는다.
   실행 전 `tools/generate_data.py`로 모든 셀과 참조를 검사하고 생성한다.
 - 동작하는 클래스·기능 단위로 유의미한 커밋을 남긴다. 커밋 메시지는 한글로 작성한다.
 - 기획서와 사용자 확정 내용으로 결정할 수 없는 게임 규칙·크기·콘텐츠는 구현 전에
