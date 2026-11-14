@@ -1,4 +1,4 @@
-"""Python + pico2d 크기 확인용 첫 실행점."""
+"""Python + pico2d 도형 전투 훈련의 실행점."""
 
 from ctypes import byref
 
