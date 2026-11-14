@@ -19,7 +19,7 @@ class CombatHUD:
         mode = self.mode
         combat, camera = mode.player.combat, mode.camera
         top = camera.height_px - 32
-        pico2d.draw_rectangle(12, top - 112, 340, top + 20, 13, 20, 29, filled=True)
+        pico2d.draw_rectangle(12, top - 143, 360, top + 20, 13, 20, 29, filled=True)
         self.font.draw(24, top, f'HP {combat.hp:g} / {combat.settings["player_hp"]:g}', (225, 243, 242))
         pico2d.draw_rectangle(24, top - 20, 310, top - 10, 66, 40, 49, filled=True)
         pico2d.draw_rectangle(24, top - 20, 24 + 286 * combat.hp / combat.settings['player_hp'],
@@ -36,7 +36,12 @@ class CombatHUD:
         states = {'free': '이동', 'raising': '방패 들기', 'guard': '기본 방어', 'beam': '광선', 'dead': '사망'}
         remaining = sum(enemy.hp > 0 for enemy in mode.enemies)
         self.font.draw(24, top - 94, f'{states[combat.state]}  |  남은 적 {remaining}', (225, 234, 244))
-        self.font.draw(22, 24, 'WASD 이동  |  우클릭 패링 / 유지 방어  |  좌클릭 광선  |  R 재시작  |  ESC 일시정지', (205, 218, 228))
+        selections = {'all': '혼합', 'melee': '근접만', 'ranged': '원거리만'}
+        self.font.draw(24, top - 123,
+                       f'WAVE {mode.waves.number}  |  {selections[mode.waves.selection]}  |  대기 {mode.waves.pending}',
+                       (218, 228, 248))
+        self.font.draw(22, 47, 'WASD 이동 | 우클릭 패링/방어 | 좌클릭 광선 | R 재시작 | ESC 일시정지', (205, 218, 228))
+        self.font.draw(22, 23, '1~4 웨이브 이동 | 8 근접만 | 9 원거리만 | 0 혼합 (현재 웨이브 재생성)', (237, 208, 146))
         x, y = camera.width_px / 2, camera.height_px / 2
         if combat.time < combat.message_until:
             self.font.draw(x - 35, y + 58, combat.message, (248, 228, 142))
@@ -44,5 +49,7 @@ class CombatHUD:
             self.font.draw(x - 100, y + 96, '일시정지 · ESC로 계속', (245, 236, 201))
         elif combat.hp <= 0:
             self.font.draw(x - 98, y + 96, '쓰러졌습니다 · R로 재시작', (255, 172, 163))
-        elif remaining == 0:
-            self.font.draw(x - 100, y + 96, '훈련 완료 · R로 다시 시작', (171, 247, 195))
+        elif mode.waves.number == 4:
+            self.font.draw(x - 112, y + 96, '4웨이브 대기 · 보스 미구현', (171, 247, 195))
+        elif remaining == 0 and mode.waves.pending == 0:
+            self.font.draw(x - 118, y + 96, '웨이브 정리 · 숫자 키로 이동', (171, 247, 195))
