@@ -8,6 +8,7 @@ from combat_data import ENEMIES
 from enemy import MeleeEnemy
 from ranged_enemy import RangedEnemy
 from wave_data import GATES, MODES, RANGED, SETTINGS, WAVES
+from enemy_spacing import spawn_position
 
 
 class WaveManager:
@@ -63,6 +64,7 @@ class WaveManager:
                 enemy = MeleeEnemy(identifier, ENEMIES[kind], x, y, self.player)
             else:
                 enemy = RangedEnemy(identifier, RANGED[kind], x, y, self.player, self.add_projectile)
+            enemy.x, enemy.y = spawn_position(enemy, x, y)
             self.enemies.append(enemy)
             game_world.add_object(enemy, 1)
             self.spawn_log.append((time, gate['id'], kind))
