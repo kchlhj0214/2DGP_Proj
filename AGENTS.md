@@ -8,8 +8,8 @@
 - 위치와 히트박스는 m, 시간은 s, 속도는 m/s로 계산한다.
   km/h 설정은 m/s로 바꾸고 `game_framework.frame_time`을 곱한다.
   픽셀 환산은 Camera를 통해 렌더링 단계에서만 한다.
-- 수치는 `data/scale.json`과 `data/combat.json`이 원본이다.
-  생성된 `game_data.py`, `combat_data.py`는 직접 수정하지 않는다.
+- 수치는 `data/scale.json`, `data/combat.json`, `data/waves.json`이 원본이다.
+  생성된 `game_data.py`, `combat_data.py`, `wave_data.py`는 직접 수정하지 않는다.
   실행 전 `tools/generate_data.py`로 모든 셀과 참조를 검사하고 생성한다.
 - 동작하는 클래스·기능 단위로 유의미한 커밋을 남긴다. 커밋 메시지는 한글로 작성한다.
 - 기획서와 사용자 확정 내용으로 결정할 수 없는 게임 규칙·크기·콘텐츠는 구현 전에
@@ -25,6 +25,10 @@
 - 이 단계는 이미지 없이 도형으로 표현한다. 현재 추가 요청은 기본 방어·패링·광선과
   근접 적의 쓸어 베기다. 합의 내용은 `docs/combat-decisions.md`를 읽는다.
 - 근접 적의 몸체와 히트박스는 사용자 승인으로 주인공과 동일한 0.9m × 1.8m이다.
+- 최신 웨이브·원거리 규칙은 `docs/wave-debug-decisions.md`를 따른다.
+  1~4는 웨이브 이동, 8/9/0은 근접만/원거리만/혼합으로 현재 웨이브 재생성.
+  네 방향 동시 시작, 각 입구 0.3초 간격, 출현/원거리 공격 예고 없음.
+  원거리 적은 사거리 안에서 3초 간격으로 발사. 4웨이브는 보스 없는 대기 상태.
 - `python -m unittest discover -s tests -v`는 SDL dummy 드라이버로 실행된다.
   사용자 화면과 입력을 사용하지 않는다. 전체화면 육안 검증 또는 Patch 테스트로
   오인해 보고하지 않는다. 실제 게임 실행 검증은 이 채팅의 Patch 테스트 규칙을 따른다.
