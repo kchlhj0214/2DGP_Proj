@@ -84,7 +84,9 @@ class PlayerCombat:
             self.state = 'free'
 
     def front(self, source):
-        delta = atan2(source.y - self.owner.y, source.x - self.owner.x) - self.aim
+        direction = getattr(source, 'incoming_angle',
+                            atan2(source.y - self.owner.y, source.x - self.owner.x))
+        delta = direction - self.aim
         return cos(delta) >= cos(radians(self.settings['guard_angle_deg']) / 2) - 1e-9
 
     def receive(self, attack_id, source, damage, energy_gain):
@@ -101,7 +103,7 @@ class PlayerCombat:
             if not self.success:
                 self.success_invuln_until = self.time + self.settings['success_invuln_s']
             self.success = True
-            if not self.stunned_one:
+            if not self.stunned_one and getattr(source, 'can_be_stunned', True):
                 source.stun(self.settings['stun_s'])
                 self.stunned_one = True
             self.feedback('parry')

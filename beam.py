@@ -1,6 +1,6 @@
 """발사 방향과 위력을 고정하고 시작점만 플레이어를 따라가는 광선."""
 
-from geometry import box_points, draw_polygon, intersects, oriented_box, ray_length
+from geometry import box_points, circle_intersects_polygon, draw_polygon, intersects, oriented_box, ray_length
 
 
 class Beam:
@@ -15,6 +15,7 @@ class Beam:
         self.ticks = 0
         self.hit_ids = []
         self.apply_tick()
+        self.erase_projectiles()
 
     @property
     def active(self):
@@ -39,6 +40,14 @@ class Beam:
         self.age += dt
         while self.ticks < 3 and self.age + 1e-9 >= self.ticks * self.tick_interval:
             self.apply_tick()
+        if self.active:
+            self.erase_projectiles()
+
+    def erase_projectiles(self):
+        polygon = self.polygon()
+        for projectile in self.owner.projectiles:
+            if projectile.active and circle_intersects_polygon(projectile.x, projectile.y, projectile.radius, polygon):
+                projectile.active, projectile.result = False, 'beam'
 
     def draw(self):
         if self.active:

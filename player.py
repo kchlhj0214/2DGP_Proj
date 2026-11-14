@@ -18,6 +18,7 @@ class Player:
         self.arena, self.camera = arena, camera
         self.pressed_keys = set()
         self.targets = []
+        self.projectiles = []
         self.combat = PlayerCombat(self)
 
     def handle_event(self, event):
