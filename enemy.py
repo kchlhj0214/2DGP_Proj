@@ -7,6 +7,7 @@ import pico2d
 import game_framework
 from game_data import CHARACTERS, VIEWPORTS
 from geometry import box_points, draw_polygon, draw_sector, intersects, oriented_box
+from enemy_spacing import move_enemy
 
 
 class MeleeEnemy:
@@ -63,8 +64,7 @@ class MeleeEnemy:
             if distance > self.data['stop_m'] + 1e-9:
                 step = min(distance - self.data['stop_m'], self.data['speed_kmph'] / 3.6 * dt)
                 # 적의 발밑도 플레이어와 같은 원 경계를 사용한다.
-                self.x, self.y = self.player.constrain_position(
-                    self.x + dx / distance * step, self.y + dy / distance * step)
+                move_enemy(self, dx / distance * step, dy / distance * step)
             else:
                 self.state, self.age = 'windup', 0.0
                 self.angle = atan2(dy, dx)

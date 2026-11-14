@@ -7,6 +7,7 @@ import pico2d
 import game_framework
 from enemy import MeleeEnemy
 from projectile import Projectile
+from enemy_spacing import move_enemy
 
 
 class RangedEnemy(MeleeEnemy):
@@ -32,8 +33,7 @@ class RangedEnemy(MeleeEnemy):
         if distance > self.data['range_m'] + 1e-9:
             self.state = 'chase'
             step = min(distance - self.data['range_m'], self.data['speed_kmph'] / 3.6 * dt)
-            self.x, self.y = self.player.constrain_position(
-                self.x + dx / distance * step, self.y + dy / distance * step)
+            move_enemy(self, dx / distance * step, dy / distance * step)
             return
         self.state = 'shoot'
         if self.cooldown <= 1e-9:
