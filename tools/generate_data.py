@@ -53,15 +53,75 @@ def validate(data):
 
 def generate():
     data = validate(json.loads((ROOT / 'data/scale.json').read_text(encoding='utf-8')))
-    source = '# 자동 생성 파일: data/scale.json을 수정한 뒤 tools/generate_data.py 실행\n'
-    for name, rows in data.items():
-        source += f'{name.upper()} = {pformat({row["id"]: row for row in rows}, sort_dicts=False)}\n\n'
-    (ROOT / 'game_data.py').write_text(source, encoding='utf-8')
     combat = validate_combat(json.loads((ROOT / 'data/combat.json').read_text(encoding='utf-8')), data)
-    source = '# 자동 생성 파일: data/combat.json을 수정한 뒤 tools/generate_data.py 실행\n'
-    for name, rows in combat.items():
-        source += f'{name.upper()} = {pformat({row["id"]: row for row in rows}, sort_dicts=False)}\n\n'
-    (ROOT / 'combat_data.py').write_text(source, encoding='utf-8')
+    waves = validate_waves(json.loads((ROOT / 'data/waves.json').read_text(encoding='utf-8')), data, combat)
+    # 모든 시트 검증이 성공한 뒤에만 코드를 생성한다.
+    for sheet, output, content in (('scale', 'game_data.py', data),
+                                   ('combat', 'combat_data.py', combat),
+                                   ('waves', 'wave_data.py', waves)):
+        source = f'# 자동 생성 파일: data/{sheet}.json을 수정한 뒤 tools/generate_data.py 실행\n'
+        for name, rows in content.items():
+            source += f'{name.upper()} = {pformat({row["id"]: row for row in rows}, sort_dicts=False)}\n\n'
+        (ROOT / output).write_text(source, encoding='utf-8')
+
+
+def validate_waves(data, scale, combat):
+    from math import isfinite
+    schemas = {
+        'settings': {'id', 'spawn_interval_s'},
+        'waves': {'id', 'number', 'melee_id', 'ranged_id', 'melee_per_gate', 'ranged_per_gate'},
+        'modes': {'id', 'key'},
+        'gates': {'id', 'x_ratio', 'y_ratio'},
+        'ranged': {'id', 'character_id', 'hp', 'speed_kmph', 'range_m', 'attack_interval_s',
+                   'projectile_speed_mps', 'projectile_radius_m', 'damage', 'energy_gain'},
+    }
+    if set(data) != set(schemas):
+        raise ValueError('웨이브 시트 종류가 올바르지 않습니다.')
+    for name, fields in schemas.items():
+        rows = data[name]
+        if not isinstance(rows, list) or not rows:
+            raise ValueError(f'{name}: 비어 있는 시트')
+        ids = set()
+        for row in rows:
+            if set(row) != fields:
+                raise ValueError(f'{name}: 누락되거나 알 수 없는 셀')
+            for field, value in row.items():
+                if field == 'id' or field.endswith('_id'):
+                    if not isinstance(value, str) or not value:
+                        raise ValueError(f'{name}.{field}: 빈 ID')
+                elif isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
+                    raise ValueError(f'{name}.{field}: 유한 수가 필요합니다.')
+                elif field not in ('key', 'melee_per_gate', 'ranged_per_gate', 'x_ratio', 'y_ratio') and value <= 0:
+                    raise ValueError(f'{name}.{field}: 양수가 필요합니다.')
+            if row['id'] in ids:
+                raise ValueError(f'{name}: 중복 ID')
+            ids.add(row['id'])
+    if {row['id'] for row in data['settings']} != {'main'}:
+        raise ValueError('출현 설정 누락')
+    if {row['number'] for row in data['waves']} != {1, 2, 3, 4} or len(data['waves']) != 4:
+        raise ValueError('1~4 웨이브가 필요합니다.')
+    if {row['id']: row['key'] for row in data['modes']} != {'all': 0, 'melee': 8, 'ranged': 9}:
+        raise ValueError('디버그 모드 키 설정이 잘못되었습니다.')
+    if {row['id']: (row['x_ratio'], row['y_ratio']) for row in data['gates']} != {
+            'north': (0, 1), 'south': (0, -1), 'west': (-1, 0), 'east': (1, 0)}:
+        raise ValueError('상하좌우 입구가 필요합니다.')
+    melee_ids = {row['id'] for row in combat['enemies']}
+    ranged_ids = {row['id'] for row in data['ranged']}
+    for row in data['waves']:
+        if row['melee_id'] not in melee_ids or row['ranged_id'] not in ranged_ids:
+            raise ValueError('존재하지 않는 웨이브 적 참조')
+        for field in ('number', 'melee_per_gate', 'ranged_per_gate'):
+            if type(row[field]) is not int or row[field] < 0:
+                raise ValueError('웨이브 번호와 마릿수는 음수가 아닌 정수여야 합니다.')
+        if row['number'] == 4 and row['melee_per_gate'] + row['ranged_per_gate'] != 0:
+            raise ValueError('보스 미구현 4웨이브는 비어 있어야 합니다.')
+    characters = {row['id']: row for row in scale['characters']}
+    for row in data['ranged']:
+        if row['character_id'] not in characters:
+            raise ValueError('존재하지 않는 원거리 캐릭터 참조')
+        if not combat['systems'][0]['guard_kmph'] < row['speed_kmph'] < characters[row['character_id']]['speed_kmph']:
+            raise ValueError('원거리 적 이동 속도 관계가 잘못되었습니다.')
+    return data
 
 
 def validate_combat(data, scale):
