@@ -30,6 +30,10 @@ MODES = {'all': {'id': 'all', 'key': 0},
  'melee': {'id': 'melee', 'key': 8},
  'ranged': {'id': 'ranged', 'key': 9}}
 
+SINGLE_MODES = {'none': {'id': 'none', 'enemy_id': 'melee', 'count': 0},
+ 'melee': {'id': 'melee', 'enemy_id': 'melee', 'count': 1},
+ 'ranged': {'id': 'ranged', 'enemy_id': 'ranged', 'count': 1}}
+
 GATES = {'north': {'id': 'north', 'x_ratio': 0, 'y_ratio': 1},
  'south': {'id': 'south', 'x_ratio': 0, 'y_ratio': -1},
  'west': {'id': 'west', 'x_ratio': -1, 'y_ratio': 0},

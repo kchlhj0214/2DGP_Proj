@@ -13,6 +13,11 @@
     {"id": "melee", "key": 8},
     {"id": "ranged", "key": 9}
   ],
+  "single_modes": [
+    {"id": "none", "enemy_id": "melee", "count": 0},
+    {"id": "melee", "enemy_id": "melee", "count": 1},
+    {"id": "ranged", "enemy_id": "ranged", "count": 1}
+  ],
   "gates": [
     {"id": "north", "x_ratio": 0, "y_ratio": 1},
     {"id": "south", "x_ratio": 0, "y_ratio": -1},

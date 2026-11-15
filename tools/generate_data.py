@@ -71,6 +71,7 @@ def validate_waves(data, scale, combat):
         'settings': {'id', 'spawn_interval_s'},
         'waves': {'id', 'number', 'melee_id', 'ranged_id', 'melee_per_gate', 'ranged_per_gate'},
         'modes': {'id', 'key'},
+        'single_modes': {'id', 'enemy_id', 'count'},
         'gates': {'id', 'x_ratio', 'y_ratio'},
         'ranged': {'id', 'character_id', 'hp', 'speed_kmph', 'range_m', 'attack_interval_s',
                    'projectile_speed_mps', 'projectile_radius_m', 'damage', 'energy_gain'},
@@ -91,7 +92,7 @@ def validate_waves(data, scale, combat):
                         raise ValueError(f'{name}.{field}: 빈 ID')
                 elif isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
                     raise ValueError(f'{name}.{field}: 유한 수가 필요합니다.')
-                elif field not in ('key', 'melee_per_gate', 'ranged_per_gate', 'x_ratio', 'y_ratio') and value <= 0:
+                elif field not in ('key', 'count', 'melee_per_gate', 'ranged_per_gate', 'x_ratio', 'y_ratio') and value <= 0:
                     raise ValueError(f'{name}.{field}: 양수가 필요합니다.')
             if row['id'] in ids:
                 raise ValueError(f'{name}: 중복 ID')
@@ -107,6 +108,13 @@ def validate_waves(data, scale, combat):
         raise ValueError('상하좌우 입구가 필요합니다.')
     melee_ids = {row['id'] for row in combat['enemies']}
     ranged_ids = {row['id'] for row in data['ranged']}
+    if [row['id'] for row in data['single_modes']] != ['none', 'melee', 'ranged']:
+        raise ValueError('Q 디버그 모드 순서는 적 없음/근접/원거리여야 합니다.')
+    for row in data['single_modes']:
+        if row['enemy_id'] not in melee_ids | ranged_ids:
+            raise ValueError('존재하지 않는 단일 디버그 적 참조')
+        if type(row['count']) is not int or row['count'] != (0 if row['id'] == 'none' else 1):
+            raise ValueError('단일 디버그 적 수는 적 없음 0, 나머지 1이어야 합니다.')
     for row in data['waves']:
         if row['melee_id'] not in melee_ids or row['ranged_id'] not in ranged_ids:
             raise ValueError('존재하지 않는 웨이브 적 참조')
