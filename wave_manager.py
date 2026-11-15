@@ -7,7 +7,7 @@ import game_world
 from combat_data import ENEMIES
 from enemy import MeleeEnemy
 from ranged_enemy import RangedEnemy
-from wave_data import GATES, MODES, RANGED, SETTINGS, WAVES
+from wave_data import GATES, MODES, RANGED, SETTINGS, SINGLE_MODES, WAVES
 from enemy_spacing import spawn_position
 
 
@@ -16,6 +16,7 @@ class WaveManager:
         self.player, self.enemies, self.projectiles = player, enemies, projectiles
         self.number = 1
         self.selection = 'all'
+        self.single_mode = None
         self.elapsed = 0.0
         self.generation = 0
         self.queue = deque()
@@ -30,6 +31,8 @@ class WaveManager:
         game_world.add_object(projectile, 1)
 
     def load(self, number=None, selection=None):
+        if number is not None or selection is not None:
+            self.single_mode = None
         if number is not None:
             self.number = number
         if selection is not None:
@@ -48,9 +51,14 @@ class WaveManager:
                  + [wave['ranged_id']] * wave['ranged_per_gate'])
         if self.selection != 'all':
             kinds = [wave[f'{self.selection}_id']] * len(kinds)
-        for index, kind in enumerate(kinds):
-            for gate in GATES.values():
-                self.queue.append((index * SETTINGS['main']['spawn_interval_s'], gate, kind))
+        if self.single_mode is not None:
+            row = SINGLE_MODES[self.single_mode]
+            if row['count']:
+                self.queue.append((0, GATES['north'], row['enemy_id']))
+        else:
+            for index, kind in enumerate(kinds):
+                for gate in GATES.values():
+                    self.queue.append((index * SETTINGS['main']['spawn_interval_s'], gate, kind))
         # 네 방향의 첫 적은 즉시 동시에 출현하며 별도 예고는 없다.
         self.spawn_due()
 
@@ -70,6 +78,12 @@ class WaveManager:
             self.spawn_log.append((time, gate['id'], kind))
 
     def handle_key(self, key):
+        if key == ord('q'):
+            modes = list(SINGLE_MODES)
+            index = modes.index(self.single_mode) if self.single_mode is not None else -1
+            self.single_mode = modes[(index + 1) % len(modes)]
+            self.load()
+            return True
         # pico2d의 숫자 키는 ASCII 코드이므로 키패드와 구분해 처리한다.
         for row in WAVES.values():
             if key == ord(str(row['number'])):
