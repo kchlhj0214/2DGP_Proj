@@ -75,6 +75,39 @@ class WaveTests(unittest.TestCase):
                 ranged = sum(isinstance(e, RangedEnemy) for e in waves.enemies)
                 self.assertEqual(ranged, 0 if selection == 'melee' else count if selection == 'ranged' else min(count, 4))
 
+    def test_q_cycles_zero_one_melee_one_ranged_and_clears_old_wave(self):
+        player, waves = controller()
+        waves.load(3)
+        old = waves.enemies[:]
+        bullet = Projectile('old-single', 10, 0, 0, RANGED['ranged'], player)
+        waves.add_projectile(bullet)
+        player.combat.hp, player.combat.energy = 70, 20
+        for expected, count in (('none', 0), ('melee', 1), ('ranged', 1), ('none', 0)):
+            self.assertTrue(waves.handle_key(pico2d.SDLK_q))
+            elapse(waves, 10)
+            self.assertEqual((waves.single_mode, len(waves.enemies), waves.pending), (expected, count, 0))
+            self.assertFalse(waves.projectiles)
+            self.assertEqual((player.combat.hp, player.combat.energy), (70, 20))
+            if count:
+                self.assertEqual(isinstance(waves.enemies[0], RangedEnemy), expected == 'ranged')
+            for layer in game_world.world:
+                self.assertNotIn(bullet, layer)
+                self.assertTrue(all(enemy not in layer for enemy in old))
+
+    def test_number_keys_leave_single_mode_and_fourth_wave_allows_single_test(self):
+        for code in (pico2d.SDLK_1, pico2d.SDLK_2, pico2d.SDLK_3, pico2d.SDLK_4,
+                     pico2d.SDLK_8, pico2d.SDLK_9, pico2d.SDLK_0):
+            player, waves = controller()
+            waves.load(4)
+            waves.handle_key(pico2d.SDLK_q)
+            waves.handle_key(pico2d.SDLK_q)
+            self.assertEqual((waves.single_mode, len(waves.enemies)), ('melee', 1))
+            waves.handle_key(code)
+            self.assertIsNone(waves.single_mode)
+            elapse(waves, 1)
+            expected = 0 if waves.number == 4 else 16 if waves.number == 3 else 12
+            self.assertEqual(len(waves.enemies), expected)
+
     def test_jump_and_filter_remove_old_objects_and_queue_keep_player(self):
         player, waves = controller()
         waves.load()
@@ -124,7 +157,9 @@ class WaveTests(unittest.TestCase):
         for name, field, value in (('waves', 'melee_id', 'missing'), ('waves', 'ranged_id', 'missing'),
                                    ('waves', 'melee_per_gate', -1), ('waves', 'ranged_per_gate', 1.5),
                                    ('ranged', 'character_id', 'missing'), ('ranged', 'attack_interval_s', None),
-                                   ('settings', 'spawn_interval_s', 0)):
+                                   ('settings', 'spawn_interval_s', 0),
+                                   ('single_modes', 'enemy_id', 'missing'),
+                                   ('single_modes', 'count', 2)):
             data = copy.deepcopy(source)
             data[name][0][field] = value
             with self.assertRaises(ValueError):
@@ -242,6 +277,18 @@ class DebugInputRenderTests(unittest.TestCase):
             capture_png(ROOT / 'shots/wave-four-wait.png', 1280, 720)
             press(pico2d.SDLK_r)
             self.assertEqual((play_mode.waves.number, play_mode.waves.selection), (1, 'all'))
+            press(pico2d.SDLK_ESCAPE)
+            press(pico2d.SDLK_q)
+            self.assertEqual((play_mode.waves.single_mode, len(play_mode.enemies)), ('none', 0))
+            self.assertTrue(play_mode.paused)
+            press(pico2d.SDLK_q)
+            self.assertEqual((play_mode.waves.single_mode, len(play_mode.enemies)), ('melee', 1))
+            press(pico2d.SDLK_q)
+            self.assertEqual((play_mode.waves.single_mode, len(play_mode.enemies)), ('ranged', 1))
+            play_mode.player.y = 25
+            play_mode.camera.follow(play_mode.player)
+            play_mode.render()
+            capture_png(ROOT / 'shots/single-enemy-debug.png', 1280, 720)
         finally:
             play_mode.finish()
             pico2d.close_canvas()
