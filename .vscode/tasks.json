@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "크기 확인 실행",
+      "type": "process",
+      "command": "${workspaceFolder}/.scratch/python/python.exe",
+      "args": ["main.py"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "group": {"kind": "build", "isDefault": true},
+      "problemMatcher": []
+    },
+    {
+      "label": "화면 없이 크기 및 이동 검사",
+      "type": "process",
+      "command": "${workspaceFolder}/.scratch/python/python.exe",
+      "args": ["-m", "unittest", "discover", "-s", "tests", "-v"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": []
+    }
+  ]
+}
