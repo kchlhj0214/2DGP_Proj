@@ -70,7 +70,7 @@ def generate():
 
 def validate_presentation(data):
     schemas = {
-        'arena': {'art', 'water', 'ring_radius_px', 'shore_px', 'bank_drop_px', 'bridge_width_m'},
+        'arena': {'art', 'water', 'ring_radius_px', 'wall_base_px', 'bank_drop_px', 'bridge_width_m'},
         'sprites': {'atlas', 'asset_dir', 'body_height_px'},
         'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'number_s', 'rise_m',
                    'shake_s', 'shake_m', 'max_shake_m'},
@@ -85,8 +85,8 @@ def validate_presentation(data):
         if set(row) != schemas[row['id']] | {'id'}:
             raise ValueError(f'{row["id"]}: 누락되거나 알 수 없는 셀')
         for field, value in row.items():
-            if field == 'shore_px':
-                if (not isinstance(value, list) or len(value) != 16
+            if field == 'wall_base_px':
+                if (not isinstance(value, list) or len(value) != 64
                         or any(type(v) is not int or v <= row['ring_radius_px'] + row['bank_drop_px'] for v in value)):
                     raise ValueError('물길의 석벽 경계가 경기장 안쪽입니다.')
                 continue
