@@ -91,22 +91,23 @@ class PixelBrush:
 
 
 class ShieldBrush(PixelBrush):
-    """Project all the shield face details together as the top edge tips back."""
+    """Map the painted shield face onto two projected axes around the grip."""
 
-    def __init__(self, brush, center_y, shear, height_scale):
+    def __init__(self, brush, center, across, down):
         self.canvas = brush.canvas
-        self.center_y = center_y
-        self.shear = shear
-        self.height_scale = height_scale
+        self.center = center
+        self.across = across
+        self.down = down
 
     def path(self, coordinates):
         if isinstance(coordinates[0], (tuple,list)):
             return [self.path(point) for point in coordinates]
         result = []
+        cx,cy = self.center
         for x,y in zip(coordinates[::2],coordinates[1::2]):
-            dy = y-self.center_y
-            result.extend((round((x+dy*self.shear)*SCALE),
-                           round((self.center_y+dy*self.height_scale)*SCALE)))
+            u,v = x-cx,y-cy
+            result.extend((round((cx+u*self.across[0]+v*self.down[0])*SCALE),
+                           round((cy+u*self.across[1]+v*self.down[1])*SCALE)))
         return tuple(result)
 
     def ellipse(self, box, **options):
@@ -257,25 +258,24 @@ class Figure:
                 self.poly([(sx-7,sy+3),(sx-1,sy+10),(hx,hy-4),(hx-4,hy-6)], SKIN[0], None)
                 self.draw.line((sx+3,sy+5,hx+3,hy-7), fill=SKIN[2], width=2)
             else:
-                # A softer edge and shorter highlights keep the pectorals rounded in profile.
-                self.poly([(sx-w+1,sy+2),(sx-w+2,sy-1),(sx-w+5,sy-4),
-                           (sx+w-5,sy-4),(sx+w-2,sy-1),(sx+w-1,sy+2),
-                           (sx+w-2,sy+5),(hx+8,hy-6),(hx+7,hy),
-                           (hx-8,hy),(hx-9,hy-5),(sx-w+2,sy+5)], SKIN[1])
-                for sign in (-1,1):
-                    center = sx+sign*w*.39
-                    self.oval(center,sy+2.2,w*.31,3.4,'#d39a72',None)
-                    self.oval(center-.6,sy+.7,w*.22,1.7,SKIN[2],None)
-                    self.draw.line((center-w*.23,sy+5,center-w*.09,sy+6,
-                                    center+w*.10,sy+6,center+w*.22,sy+5),fill='#a36b4e')
+                left = sx-w+1+max(0,-self.fx)*3.2
+                right = sx+w-1-max(0,self.fx)*3.2
+                self.poly([(left+4,sy-4),(right-4,sy-4),(right-1,sy-2),
+                           (right,sy+1),(right,sy+3),(right-1,sy+6),
+                           ((right+hx+8)*.5,sy+9),(hx+8,hy-4),(hx+7,hy),
+                           (hx-8,hy),(hx-9,hy-4),((left+hx-9)*.5,sy+9),
+                           (left+1,sy+6),(left,sy+3),(left,sy+1),(left+1,sy-2)],SKIN[1])
+                self.poly([(left+3,sy),(left+6,sy-2),(right-5,sy-2),(right-3,sy),
+                           (right-3,sy+2),(right-6,sy+4),(left+6,sy+4),(left+3,sy+2)],
+                          '#d49a72',None)
+                self.draw.line((left+4,sy+5,sx-3,sy+6,sx+3,sy+6,right-4,sy+5),
+                               fill='#a97454')
                 self.poly([(sx+3,sy+8),(hx+7,hy-6),(hx+5,hy-2),(hx-1,hy-4)],
                           '#ad6f50',None)
                 for y in (hy-10, hy-6):
                     self.draw.line((hx-4,y,hx+2,y-1), fill=SKIN[2])
                 self.draw.line((sx-8,sy+2,sx-8,sy+5,sx-7,sy+7),fill='#825445')
                 self.draw.line((sx-9,sy+4,sx-6,sy+5),fill='#a36f55')
-                for dx in (-7,7):
-                    self.draw.point((sx+dx*self.width,sy+6),fill='#885845')
         else:
             self.segment((sx,sy), (hx,hy-2), 4, BONE)
             for i in range(4):
@@ -436,13 +436,23 @@ class Figure:
         # Side-facing while relaxed. Turn the face toward the attack when raised.
         aim = min(1, max(0, (self.pose['shield_forward']-6)/11))
         normal = -self.fx*(1-aim)+self.fy*aim
+        w = 6+8*abs(normal)
         brush = self.draw
         if self.pose['shield_pitch_deg']:
-            pitch = math.radians(self.pose['shield_pitch_deg'])
+            angle = self.pose['shield_pitch_deg']
+            pitch = math.radians(angle)
             sine,cosine = math.sin(pitch),math.cos(pitch)
-            brush = ShieldBrush(self.draw,y,self.fx*sine,cosine+.43*self.fy*sine)
-            normal = normal*cosine+.43*sine
-        w = 6+8*abs(normal)
+            forward_x = self.fx*aim+self.fy*(1-aim)
+            length = math.hypot(forward_x,normal)
+            fx,fy = forward_x/length,normal/length
+            # Pitch the disc locally about its horizontal crossbar, then project.
+            down = (fx*sine,cosine+.43*fy*sine)
+            facing = 1 if fy>=0 else -1
+            blend = min(1,angle/35)
+            across = (w/14*(1-blend)+abs(fy)*blend,-.43*fx*facing*blend)
+            brush = ShieldBrush(self.draw,center,across,down)
+            normal = fy*cosine+.43*sine
+            w = 14
         def oval(cx,cy,rx,ry,fill,outline=INK):
             brush.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=fill,outline=outline)
         oval(x+1,y+1,w+2,15,GOLD[0])
