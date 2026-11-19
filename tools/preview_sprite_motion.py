@@ -45,7 +45,7 @@ def gif(name, frames, durations=None):
 
 def pose_board():
     entries = [
-        ('hero','parry','W',3,'패링 · 무릎을 굽혀 힘 모으기'),
+        ('hero','parry','W',3,'패링 · 상체를 편 채 방패 올리기'),
         ('hero','parry','SW',7,'패링 · 팔을 머리 위로 뻗어 막기'),
         ('hero','guard','SE',3,'기본 방어 · 방패 유지'),
         ('melee','chop','E',6,'근접 공격 · 머리 위로 들어 올리기'),
@@ -184,16 +184,14 @@ def hero_parry_detail():
             stamp(canvas,sprite,(x,401),2)
         if 6 <= index <= 8:
             label = '머리 위 · 방패 면을 정면에서 위로 45도'
-        elif index < 4:
-            label = '방패를 낮추고 힘 모으기'
         elif index < 6:
-            label = '방패를 밀어 올리며 기울이기'
+            label = '상체를 편 채 방패 올리기'
         else:
             label = '기본 방어 자세로 복귀'
         draw.text((440,460),label,font=font(18),fill=TEXT,anchor='mm')
         frames.append(canvas)
         durations.append(420 if index == 7 else 240 if index == 15 else 80)
-    gif('hero-parry-diagonal-review.gif',frames,durations)
+    gif('hero-parry-upright-review.gif',frames,durations)
 
 
 if __name__ == '__main__':
