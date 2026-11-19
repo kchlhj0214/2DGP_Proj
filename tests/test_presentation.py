@@ -67,8 +67,8 @@ class PresentationTests(TestCase):
             tip, left, far_left, far_right, right = beam.polygon()
             self.assertEqual(tip, beam.origin())
             self.assertNotEqual(tip, (player.x,player.y))
-            self.assertAlmostEqual(dist(left,right), 3.6)
-            self.assertAlmostEqual(dist(far_left,far_right), 3.6)
+            self.assertAlmostEqual(dist(left,right), 4.2)
+            self.assertAlmostEqual(dist(far_left,far_right), 4.2)
             # A negative dot product proves the two flare edges form an obtuse angle.
             self.assertLess(sum((a-c)*(b-c) for a,b,c in zip(left,right,tip)), 0)
 

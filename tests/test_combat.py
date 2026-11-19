@@ -189,7 +189,7 @@ class CombatTests(unittest.TestCase):
         player.combat.energy = 40
         self.assertTrue(player.combat.fire())
         beam = player.combat.beam
-        self.assertEqual((beam.ticks, enemy.hp, beam.width), (1, 40, 3.6))
+        self.assertEqual((beam.ticks, enemy.hp, beam.width), (1, 40, 4.2))
         self.assertEqual(player.combat.energy, 0)
         advance(player, [], .5)
         self.assertEqual((beam.ticks, enemy.hp), (2, 20))
@@ -208,7 +208,7 @@ class CombatTests(unittest.TestCase):
         player.combat.fire()
         beam = player.combat.beam
         self.assertEqual((enemy.hp, other.hp), (55, 55))
-        self.assertEqual(beam.width, 1.8)
+        self.assertEqual(beam.width, 2.1)
         player.combat.aim = pi / 2
         key(player, pico2d.SDL_KEYDOWN, pico2d.SDLK_w)
         player.combat.right_down()
