@@ -5,6 +5,7 @@ from math import atan2, cos, pi, radians
 from beam import Beam
 from combat_data import STAGES, SYSTEMS
 from geometry import draw_sector
+from presentation_data import VISUALS
 
 
 class PlayerCombat:
@@ -24,6 +25,7 @@ class PlayerCombat:
         self.success = False
         self.stunned_one = False
         self.failure_reported = False
+        self.parry_hit_at = None
         self.beam = None
         self.resolved = set()
         self.events = []
@@ -51,6 +53,7 @@ class PlayerCombat:
         self.success = False
         self.stunned_one = False
         self.failure_reported = False
+        self.parry_hit_at = None
 
     def right_up(self):
         self.right_held = False
@@ -64,8 +67,22 @@ class PlayerCombat:
         self.energy = 0
         self.state = 'beam'
         self.beam = Beam(self.owner, energy, stage, self.settings)
+        if self.owner.effects:
+            self.owner.effects.beam(stage['id'] == 'stage4')
         self.feedback('beam')
         return True
+
+    def parry_frame(self):
+        elapsed = self.time - self.started
+        lock = self.settings['input_lock_s']
+        peak_at = VISUALS['parry']['raise_s']
+        if self.parry_hit_at is not None:
+            peak_at = self.parry_hit_at + VISUALS['parry']['success_lift_s']
+            if elapsed <= peak_at:
+                return 5 + 3 * (elapsed - self.parry_hit_at) / (peak_at - self.parry_hit_at)
+        elif elapsed <= peak_at:
+            return 8 * elapsed / peak_at
+        return 8 + 7 * min(1, (elapsed - peak_at) / (lock - peak_at))
 
     def advance(self, dt):
         self.time += dt
@@ -102,10 +119,13 @@ class PlayerCombat:
             self.energy = min(self.settings['energy_max'], self.energy + energy_gain)
             if not self.success:
                 self.success_invuln_until = self.time + self.settings['success_invuln_s']
+                self.parry_hit_at = self.time - self.started
             self.success = True
             if not self.stunned_one and getattr(source, 'can_be_stunned', True):
                 source.stun(self.settings['stun_s'])
                 self.stunned_one = True
+            if hasattr(source, 'start_parry_recoil'):
+                source.start_parry_recoil()
             self.feedback('parry')
             return 'parry'
         if self.time < self.success_invuln_until - 1e-9:
@@ -113,7 +133,10 @@ class PlayerCombat:
         if self.state == 'guard' and self.front(source):
             self.feedback('block')
             return 'block'
+        previous = self.hp
         self.hp = max(0, self.hp - damage)
+        if self.owner.effects:
+            self.owner.effects.damage(self.owner, previous - self.hp, player_hit=True)
         self.hit_invuln_until = self.time + self.settings['hit_invuln_s']
         self.feedback('hit')
         if self.hp == 0:

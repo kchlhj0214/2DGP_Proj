@@ -40,5 +40,7 @@ class Projectile:
         if self.active:
             camera = self.player.camera
             x, y = camera.to_screen(self.x, self.y)
-            pico2d.draw_circle(x, y, max(1, round(self.radius * camera.pixels_per_meter)),
-                              255, 204, 112, filled=True)
+            radius = max(2, round(self.radius * camera.pixels_per_meter))
+            pico2d.draw_circle(x, y, radius, 83, 44, 125, filled=True)
+            pico2d.draw_circle(x, y, max(1, radius - 1), 181, 111, 227, filled=True)
+            pico2d.draw_circle(x - 1, y + 1, max(1, radius // 2), 244, 198, 255, filled=True)

@@ -22,9 +22,14 @@ def update():
 
 
 def render():
-    for layer in world:
-        for obj in layer[:]:
-            obj.draw()
+    for obj in world[0][:]:
+        obj.draw()
+    # World y grows north. Draw the actors behind others first, using the foot anchor.
+    for obj in sorted(world[1], key=lambda item: getattr(item, 'y', 0.0)
+                      - getattr(item, 'height', 0.0) / 2, reverse=True):
+        obj.draw()
+    for obj in world[2][:]:
+        obj.draw()
 
 
 def clear():

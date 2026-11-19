@@ -1,6 +1,8 @@
 """발사 방향과 위력을 고정하고 시작점만 플레이어를 따라가는 광선."""
 
-from geometry import box_points, circle_intersects_polygon, draw_polygon, intersects, oriented_box, ray_length
+import pico2d
+
+from geometry import box_points, circle_intersects_polygon, intersects, oriented_box, ray_length
 
 
 class Beam:
@@ -35,6 +37,8 @@ class Beam:
                 hits.append(enemy.identifier)
         self.hit_ids.append(hits)
         self.ticks += 1
+        if self.owner.effects:
+            self.owner.effects.beam_pulse()
 
     def update(self, dt):
         self.age += dt
@@ -50,5 +54,17 @@ class Beam:
                 projectile.active, projectile.result = False, 'beam'
 
     def draw(self):
-        if self.active:
-            draw_polygon(self.polygon(), self.owner.camera, (115, 213, 255))
+        if not self.active:
+            return
+        camera = self.owner.camera
+        a, b, c, d = [camera.to_screen(*point) for point in self.polygon()]
+        width = max(2, round(self.width * camera.pixels_per_meter))
+        pulse = 1 - min(1, (self.age % self.tick_interval) / .16)
+        for i in range(width + 1):
+            mix = i / width
+            x1, y1 = a[0]+(d[0]-a[0])*mix, a[1]+(d[1]-a[1])*mix
+            x2, y2 = b[0]+(c[0]-b[0])*mix, b[1]+(c[1]-b[1])*mix
+            edge = abs(2*mix-1)
+            color = ((220, 252, 250) if edge < .21 + .24*pulse else
+                     (110, 227, 226) if edge < .66 else (51, 157, 168))
+            pico2d.draw_line(x1, y1, x2, y2, *color)

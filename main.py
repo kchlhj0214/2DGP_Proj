@@ -1,6 +1,7 @@
-"""Python + pico2d 도형 전투 훈련의 실행점."""
+"""Shield Attack entry point."""
 
 from ctypes import byref
+from pathlib import Path
 
 import pico2d
 
@@ -27,6 +28,9 @@ def main():
     import play_mode
 
     from game_data import VIEWPORTS
+
+    report = Path.cwd() / 'patch-test.txt'
+    play_mode.test_path = report if report.is_file() else None
 
     viewport = VIEWPORTS['main']
     desktop_width, desktop_height = desktop_size()
