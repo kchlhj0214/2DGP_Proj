@@ -276,12 +276,15 @@ def make_hero():
         a=2*math.pi*j/10
         rivet('Belt rivet',(.18*math.cos(a),.132*math.sin(a),.965))
     leather_band('Shorts',(0,.01,.81),.185,.12,.21,'iron')
+    for s in (-1,1):
+        loft('Shorts leg opening',[(s*.135,0,.735,.134,.126),
+             (s*.135,0,.79,.14,.13),(s*.135,0,.90,.13,.125)],'iron',18)
     for j in range(12):
         a=2*math.pi*j/12
         tip=.70+random.random()*.07
         points=[]
         for z,angle,radius in [(.93,a-.29,.175),(.93,a+.29,.175),
-                                 (.77,a+.25,.205),(tip,a,.22),(.77,a-.25,.205)]:
+                                 (.77,a+.25,.245),(tip,a,.25),(.77,a-.25,.245)]:
             points.append((radius*math.cos(angle),radius*.70*math.sin(angle),z))
         obj=mesh('Layered leather skirt panel',points,[(0,1,2,3,4)],'leather_light' if j%3 else 'leather')
         sol=obj.modifiers.new('Leather thickness','SOLIDIFY');sol.thickness=.012
@@ -456,11 +459,14 @@ def make_skeleton(kind):
                  (s*.285,.0,1.34),(s*.18,.15,1.37),(s*.01,.13,1.48)],
                  [(0,1,2),(0,2,3),(0,3,4)],'cloth_light')
         for j in range(8):
-            a=math.pi*j/7
-            mesh('Tattered back cloak',[(.21*math.cos(a),.10*math.sin(a)+.04,1.42),
-                 (.21*math.cos(a+.3),.10*math.sin(a+.3)+.04,1.42),
-                 (.24*math.cos(a+.3),.13*math.sin(a+.3)+.04,.65+random.random()*.12),
-                 (.24*math.cos(a),.13*math.sin(a)+.04,.57+random.random()*.12)],[(0,1,2,3)],'cloth')
+            a=math.pi*j/8
+            b=a+math.pi/8+.025
+            obj=mesh('Tattered back cloak',[(.21*math.cos(a),.10*math.sin(a)+.04,1.42),
+                 (.21*math.cos(b),.10*math.sin(b)+.04,1.42),
+                 (.24*math.cos(b),.13*math.sin(b)+.04,.65+random.random()*.12),
+                 (.24*math.cos(a),.13*math.sin(a)+.04,.57+random.random()*.12)],[(0,1,2,3)],
+                 'cloth_light' if j%3==0 else 'cloth')
+            solid=obj.modifiers.new('Cloak cloth thickness','SOLIDIFY');solid.thickness=.008
         # Curved wooden staff with a bronze claw and a violet crystal.
         x,y=.36,-.13
         tube('Mage staff',[(x,y,.05),(x+.01,y,1.05),(x-.01,y,1.56)],.021,'leather_light',12)
@@ -469,6 +475,9 @@ def make_skeleton(kind):
                  (x+s*.08,y,1.74),(x+s*.055,y,1.79)], [.018,.018,.013,.007],'bronze',8)
         ell('Violet staff crystal',(x,y,1.72),(.052,.044,.105),'violet',6,4)
         for z in (.23,.55,1.15,1.43): ring('Staff binding',(x,y,z),.025,.006,'bronze')
+        tube('Palm hovering rune',[(-.43,-.13,1.32),(-.465,-.13,1.38),
+             (-.43,-.13,1.44),(-.395,-.13,1.38),(-.43,-.13,1.32)],.006,'violet',6)
+        ell('Rune core',(-.43,-.13,1.38),(.013,.013,.027),'violet',6,4)
 
 
 def normalize(root, height):
@@ -476,7 +485,12 @@ def normalize(root, height):
     # Character body height excludes the staff and helmet crest; shared feet anchor.
     points=[obj.matrix_world @ Vector(corner) for obj in objects for corner in obj.bound_box]
     assert points and all(math.isfinite(v) for pt in points for v in pt)
-    # Model units are already authored at 1.8m; preserve equipment extending outside the body.
+    # Scale the authored 1.8m body as a whole; equipment can extend beyond body height.
+    scale=height/1.8
+    root.scale=(scale,scale,scale)
+    root.location.z=-min(v.z for v in points)*scale
+    bpy.context.view_layer.update()
+    points=[obj.matrix_world @ Vector(corner) for obj in objects for corner in obj.bound_box]
     root['body_height_m']=height
     root['foot_anchor']=[0.0,0.0,0.0]
     root['front_axis']='-Y'
@@ -562,6 +576,19 @@ def main():
         for obj in root.children_recursive: obj.hide_render=True
     # Leave the hero visible in the saved review scene.
     for obj in roots[0].children_recursive: obj.hide_render=False
+    for root in roots[1:]:
+        root.hide_set(True)
+        for obj in root.children_recursive: obj.hide_set(True)
+    camera=bpy.context.scene.camera
+    camera.location=(2.6,-4.5,2.0)
+    camera.rotation_euler=(Vector((0,0,.94))-camera.location).to_track_quat('-Z','Y').to_euler()
+    camera.data.ortho_scale=2.55
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            if area.type=='VIEW_3D':
+                area.spaces.active.region_3d.view_location=(0,0,.94)
+                area.spaces.active.region_3d.view_distance=3.1
+                area.spaces.active.region_3d.view_rotation=camera.rotation_euler.to_quaternion()
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT/'shield-attack-review.blend'))
     print('REVIEW_MODELS_COMPLETE',json.dumps(stats))
 
