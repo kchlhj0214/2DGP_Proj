@@ -32,6 +32,9 @@ def validate():
         assert frames[0][0] == 0 and all(a[0] < b[0] for a, b in zip(frames, frames[1:])), name
         for row in frames:
             assert len(row) == len(columns) and all(math.isfinite(x) for x in row), name
+        if 'shield_pitch_deg' in clip:
+            pitches = clip['shield_pitch_deg']
+            assert len(pitches) == len(frames) and all(0 <= pitch <= 90 for pitch in pitches), name
         if clip['loop']:
             assert frames[0][1:] == frames[-1][1:], name
     for name, gait in DATA['gaits'].items():
@@ -46,17 +49,19 @@ def validate():
 
 
 def poses(clip):
-    rows = clip['frames']
+    pitches = clip.get('shield_pitch_deg',[0]*len(clip['frames']))
+    rows = [row+[pitch] for row,pitch in zip(clip['frames'],pitches)]
+    columns = DATA['motion_columns']+['shield_pitch_deg']
     if len(rows) == 1:
-        yield dict(zip(DATA['motion_columns'], rows[0]))
+        yield dict(zip(columns,rows[0]))
         return
     for a, b in zip(rows, rows[1:]):
         for frame in range(a[0], b[0]):
             fraction = (frame - a[0]) / (b[0] - a[0])
             values = [x + (y - x) * fraction for x, y in zip(a, b)]
-            yield dict(zip(DATA['motion_columns'], values))
+            yield dict(zip(columns,values))
     if not clip['loop']:
-        yield dict(zip(DATA['motion_columns'], rows[-1]))
+        yield dict(zip(columns,rows[-1]))
 
 
 class PixelBrush:
@@ -83,6 +88,33 @@ class PixelBrush:
 
     def point(self, coordinates, fill):
         self.canvas.point(self.path(coordinates), fill)
+
+
+class ShieldBrush(PixelBrush):
+    """Project all the shield face details together as the top edge tips back."""
+
+    def __init__(self, brush, center_y, shear, height_scale):
+        self.canvas = brush.canvas
+        self.center_y = center_y
+        self.shear = shear
+        self.height_scale = height_scale
+
+    def path(self, coordinates):
+        if isinstance(coordinates[0], (tuple,list)):
+            return [self.path(point) for point in coordinates]
+        result = []
+        for x,y in zip(coordinates[::2],coordinates[1::2]):
+            dy = y-self.center_y
+            result.extend((round((x+dy*self.shear)*SCALE),
+                           round((self.center_y+dy*self.height_scale)*SCALE)))
+        return tuple(result)
+
+    def ellipse(self, box, **options):
+        left,top,right,bottom = box
+        x,y = (left+right)*.5,(top+bottom)*.5
+        rx,ry = (right-left)*.5,(bottom-top)*.5
+        angles = (i*math.tau/40 for i in range(40))
+        self.polygon([(x+rx*math.cos(a),y+ry*math.sin(a)) for a in angles],**options)
 
 
 class Figure:
@@ -216,18 +248,28 @@ class Figure:
         hx, hy = hips
         w = (16 if self.actor == 'hero' else 10)*self.width
         if self.actor == 'hero':
-            self.poly([(sx-w,sy+1),(sx-w+4,sy-4),(sx+w-4,sy-4),(sx+w,sy+1),
-                       (hx+8,hy-6),(hx+7,hy),(hx-8,hy),(hx-9,hy-5)], SKIN[1])
-            self.poly([(sx-w+2,sy+2),(sx-2,sy-3),(sx+1,sy+2),
-                       (sx+w-3,sy),(sx+w-5,sy+6),(sx-1,sy+6),(sx-6,sy+7)], SKIN[2], None)
             if self.back:
+                self.poly([(sx-w,sy+1),(sx-w+4,sy-4),(sx+w-4,sy-4),(sx+w,sy+1),
+                           (hx+8,hy-6),(hx+7,hy),(hx-8,hy),(hx-9,hy-5)], SKIN[1])
+                self.poly([(sx-w+2,sy+2),(sx-2,sy-3),(sx+1,sy+2),
+                           (sx+w-3,sy),(sx+w-5,sy+6),(sx-1,sy+6),(sx-6,sy+7)],
+                          SKIN[2], None)
                 self.poly([(sx-7,sy+3),(sx-1,sy+10),(hx,hy-4),(hx-4,hy-6)], SKIN[0], None)
                 self.draw.line((sx+3,sy+5,hx+3,hy-7), fill=SKIN[2], width=2)
             else:
-                self.draw.line((sx-w*.72,sy+6,sx-3,sy+9,sx+2,sy+7,sx+w*.65,sy+6),
-                               fill=SKIN[0], width=2)
-                self.poly([(sx+3,sy+9),(hx+7,hy-6),(hx+5,hy-2),(hx-1,hy-4)],
-                          '#ad6f50', None)
+                # A softer edge and shorter highlights keep the pectorals rounded in profile.
+                self.poly([(sx-w+1,sy+2),(sx-w+2,sy-1),(sx-w+5,sy-4),
+                           (sx+w-5,sy-4),(sx+w-2,sy-1),(sx+w-1,sy+2),
+                           (sx+w-2,sy+5),(hx+8,hy-6),(hx+7,hy),
+                           (hx-8,hy),(hx-9,hy-5),(sx-w+2,sy+5)], SKIN[1])
+                for sign in (-1,1):
+                    center = sx+sign*w*.39
+                    self.oval(center,sy+2.2,w*.31,3.4,'#d39a72',None)
+                    self.oval(center-.6,sy+.7,w*.22,1.7,SKIN[2],None)
+                    self.draw.line((center-w*.23,sy+5,center-w*.09,sy+6,
+                                    center+w*.10,sy+6,center+w*.22,sy+5),fill='#a36b4e')
+                self.poly([(sx+3,sy+8),(hx+7,hy-6),(hx+5,hy-2),(hx-1,hy-4)],
+                          '#ad6f50',None)
                 for y in (hy-10, hy-6):
                     self.draw.line((hx-4,y,hx+2,y-1), fill=SKIN[2])
                 self.draw.line((sx-8,sy+2,sx-8,sy+5,sx-7,sy+7),fill='#825445')
@@ -394,39 +436,48 @@ class Figure:
         # Side-facing while relaxed. Turn the face toward the attack when raised.
         aim = min(1, max(0, (self.pose['shield_forward']-6)/11))
         normal = -self.fx*(1-aim)+self.fy*aim
+        brush = self.draw
+        if self.pose['shield_pitch_deg']:
+            pitch = math.radians(self.pose['shield_pitch_deg'])
+            sine,cosine = math.sin(pitch),math.cos(pitch)
+            brush = ShieldBrush(self.draw,y,self.fx*sine,cosine+.43*self.fy*sine)
+            normal = normal*cosine+.43*sine
         w = 6+8*abs(normal)
-        self.oval(x+1,y+1,w+2,15,GOLD[0])
-        self.oval(x,y,w+1.5,15,GOLD[1])
-        self.oval(x,y-1,w+.6,13.8,GOLD[1],None)
+        def oval(cx,cy,rx,ry,fill,outline=INK):
+            brush.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=fill,outline=outline)
+        oval(x+1,y+1,w+2,15,GOLD[0])
+        oval(x,y,w+1.5,15,GOLD[1])
+        oval(x,y-1,w+.6,13.8,GOLD[1],None)
         wood = normal < -.15
-        self.oval(x,y,w-1,12,'#775037' if wood else '#383742')
+        oval(x,y,w-1,12,'#775037' if wood else '#383742')
         if wood:
             for part in (-.45,0,.45):
                 board_x = x+w*part
-                self.draw.line((board_x,y-9,board_x,y+8),fill='#593b30')
+                brush.line((board_x,y-9,board_x,y+8),fill='#593b30')
         else:
             for index in range(10):
                 angle = index*math.tau/10+math.pi/10
                 rx,ry = x+math.cos(angle)*(w-2.5),y+math.sin(angle)*9.7
-                self.draw.line((rx-.55,ry+.7,rx,ry-.6,rx+.75,ry+.25),fill=GOLD[1])
+                brush.line((rx-.55,ry+.7,rx,ry-.6,rx+.75,ry+.25),fill=GOLD[1])
             for dx,dy in ((-.38,-5),(.37,3),(.56,-5),(-.62,4),(.31,7)):
-                self.draw.line((x+w*dx,y+dy,x+w*dx+1.1,y+dy-.7),fill='#5c514a')
-        self.draw.line((x,y-11,x,y+11),fill=GOLD[0],width=3)
-        self.draw.line((x-.65,y-11,x-.65,y+10),fill=GOLD[1])
-        self.draw.line((x-w+2,y,x+w-2,y),fill=GOLD[0],width=3)
-        self.draw.line((x-w+2,y-1,x+w-2,y-1),fill=GOLD[1])
+                brush.line((x+w*dx,y+dy,x+w*dx+1.1,y+dy-.7),fill='#5c514a')
+        brush.line((x,y-11,x,y+11),fill=GOLD[0],width=3)
+        brush.line((x-.65,y-11,x-.65,y+10),fill=GOLD[1])
+        brush.line((x-w+2,y,x+w-2,y),fill=GOLD[0],width=3)
+        brush.line((x-w+2,y-1,x+w-2,y-1),fill=GOLD[1])
         if not wood:
-            self.oval(x,y,3.8,3.8,GOLD[1])
-            self.poly([(x,y-3),(x+2.4,y-1),(x+2,y+2),(x,y+3),(x-2.2,y+1.3),(x-2,y-1.5)],'#55c6b3')
-            self.draw.line((x-1.5,y+.4,x-1,y-1.35,x+.3,y-1.8),fill='#c9fff2')
+            oval(x,y,3.8,3.8,GOLD[1])
+            brush.polygon([(x,y-3),(x+2.4,y-1),(x+2,y+2),(x,y+3),(x-2.2,y+1.3),(x-2,y-1.5)],
+                          fill='#55c6b3',outline=INK)
+            brush.line((x-1.5,y+.4,x-1,y-1.35,x+.3,y-1.8),fill='#c9fff2')
         for dx,dy in ((-.76,-7),(.76,-7),(-.76,7),(.76,7)):
-            self.draw.point((x+w*dx,y+dy),fill=GOLD[2])
+            brush.point((x+w*dx,y+dy),fill=GOLD[2])
         for index in range(12):
             angle = index*math.tau/12
             rx,ry = x+math.cos(angle)*w,y+math.sin(angle)*13.2
-            self.draw.point((rx,ry),fill=GOLD[0])
+            brush.point((rx,ry),fill=GOLD[0])
             if index not in (1,2,3):
-                self.draw.point((rx-.55,ry-.55),fill=GOLD[2])
+                brush.point((rx-.55,ry-.55),fill=GOLD[2])
 
     def weapon(self, grip):
         angle = math.radians(self.pose['blade_angle'])
