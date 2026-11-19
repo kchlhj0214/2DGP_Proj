@@ -35,10 +35,12 @@ def stamp(canvas, sprite, anchor, zoom=1):
     canvas.paste(sprite, (x-OX*zoom,y-OY*zoom), sprite)
 
 
-def gif(name, frames):
+def gif(name, frames, durations=None):
     # GIF delays have 10ms precision. Alternate 60/70ms to average 16fps.
+    if durations is None:
+        durations = [70 if i%4 == 3 else 60 for i in range(len(frames))]
     frames[0].save(OUT/name, save_all=True, append_images=frames[1:],
-                   duration=[70 if i%4 == 3 else 60 for i in range(len(frames))], loop=0)
+                   duration=durations, loop=0)
 
 
 def pose_board():
@@ -167,9 +169,37 @@ def guard_walk_scene():
     gif('guard-walk.gif',frames)
 
 
+def hero_parry_detail():
+    views = [read_frames('hero','parry',direction) for direction in ('W','SW')]
+    frames = []
+    durations = []
+    for index,(side,diagonal) in enumerate(zip(*views)):
+        canvas = Image.new('RGB',(880,482),BG)
+        draw = ImageDraw.Draw(canvas)
+        draw.text((24,17),'방패 전사 · 수정된 패링',font=font(24),fill=TEXT)
+        for x,label,sprite in ((224,'측면',side),(656,'앞 사선',diagonal)):
+            draw.rectangle((x-206,66,x+206,439),fill=PANEL)
+            draw.text((x-188,80),label,font=font(17),fill=ACCENT)
+            draw.line((x-161,405,x+161,405),fill='#4c4048')
+            stamp(canvas,sprite,(x,401),2)
+        if 6 <= index <= 8:
+            label = '머리 위 · 방패 면을 정면에서 위로 45도'
+        elif index < 4:
+            label = '방패를 낮추고 힘 모으기'
+        elif index < 6:
+            label = '방패를 밀어 올리며 기울이기'
+        else:
+            label = '기본 방어 자세로 복귀'
+        draw.text((440,460),label,font=font(18),fill=TEXT,anchor='mm')
+        frames.append(canvas)
+        durations.append(420 if index == 7 else 240 if index == 15 else 80)
+    gif('hero-parry-diagonal-review.gif',frames,durations)
+
+
 if __name__ == '__main__':
     pose_board()
     parry_scene()
     movement_scene()
     directions_board()
     guard_walk_scene()
+    hero_parry_detail()
