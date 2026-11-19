@@ -1,6 +1,7 @@
 """데이터 시트를 검증한 뒤 게임에서 사용하는 상수를 생성한다."""
 
 import json
+from math import isfinite
 from pathlib import Path
 from pprint import pformat
 
@@ -55,14 +56,65 @@ def generate():
     data = validate(json.loads((ROOT / 'data/scale.json').read_text(encoding='utf-8')))
     combat = validate_combat(json.loads((ROOT / 'data/combat.json').read_text(encoding='utf-8')), data)
     waves = validate_waves(json.loads((ROOT / 'data/waves.json').read_text(encoding='utf-8')), data, combat)
+    presentation = validate_presentation(json.loads((ROOT / 'data/presentation.json').read_text(encoding='utf-8')))
     # 모든 시트 검증이 성공한 뒤에만 코드를 생성한다.
     for sheet, output, content in (('scale', 'game_data.py', data),
                                    ('combat', 'combat_data.py', combat),
-                                   ('waves', 'wave_data.py', waves)):
+                                   ('waves', 'wave_data.py', waves),
+                                   ('presentation', 'presentation_data.py', presentation)):
         source = f'# 자동 생성 파일: data/{sheet}.json을 수정한 뒤 tools/generate_data.py 실행\n'
         for name, rows in content.items():
             source += f'{name.upper()} = {pformat({row["id"]: row for row in rows}, sort_dicts=False)}\n\n'
         (ROOT / output).write_text(source, encoding='utf-8')
+
+
+def validate_presentation(data):
+    schemas = {
+        'arena': {'art', 'water', 'ring_radius_px', 'water_width_m', 'bridge_width_m'},
+        'sprites': {'atlas', 'asset_dir', 'body_height_px'},
+        'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'number_s', 'rise_m',
+                   'shake_s', 'shake_m', 'max_shake_m'},
+        'parry': {'push_m', 'push_s', 'raise_s', 'success_lift_s'},
+    }
+    paths = {'art', 'water', 'atlas', 'asset_dir', 'sound'}
+    rows = data.get('visuals', [])
+    if len(rows) != len(schemas) or {row.get('id') for row in rows} != set(schemas):
+        raise ValueError('화면 연출 시트 누락')
+    for row in rows:
+        if set(row) != schemas[row['id']] | {'id'}:
+            raise ValueError(f'{row["id"]}: 누락되거나 알 수 없는 셀')
+        for field, value in row.items():
+            if field in paths and (not isinstance(value, str) or not value or not (ROOT / value).exists()):
+                raise ValueError(f'{field}: 없는 리소스')
+            if field not in paths | {'id'} and (type(value) not in (int, float) or not isfinite(value) or value <= 0):
+                raise ValueError(f'{field}: 양의 유한 수가 필요합니다')
+    assets = next(row for row in rows if row['id'] == 'sprites')
+    atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))
+    expected = {'hero': {'idle','guard_walk','guard','run','parry'},
+                'melee': {'idle','walk','chop','deflected'},
+                'ranged': {'idle','walk','cast'}}
+    if atlas['directions'] != ['S','SE','E','NE','N','NW','W','SW'] or atlas['fps'] <= 0:
+        raise ValueError('스프라이트 방향 또는 속도 오류')
+    for clip in atlas['clips']:
+        actor, action = clip['actor'], clip['action']
+        if action not in expected.get(actor,set()) or type(clip['frames']) is not int or clip['frames'] < 1:
+            raise ValueError(f'잘못된 스프라이트 참조: {actor}/{action}')
+        expected[actor].remove(action)
+        source = ROOT / assets['atlas']
+        if action == 'deflected':
+            source = ROOT / assets['asset_dir'] / f'{actor}-{action}.png'
+        else:
+            source = source.parent / clip['file']
+        if not source.is_file() or not (ROOT / assets['asset_dir'] / f'{actor}-{action}-flash.png').is_file():
+            raise ValueError(f'스프라이트 파일 누락: {actor}/{action}')
+    if any(expected.values()):
+        raise ValueError('필수 캐릭터 동작 누락')
+    impact = next(row for row in rows if row['id'] == 'impact')
+    if not impact['hitstop_s'] < impact['flash_s'] < impact['number_s'] or impact['volume'] > 128:
+        raise ValueError('피격 연출 길이 또는 음량 오류')
+    if impact['max_shake_m'] <= impact['shake_m']:
+        raise ValueError('최대 광선의 흔들림이 기본보다 작습니다')
+    return data
 
 
 def validate_waves(data, scale, combat):

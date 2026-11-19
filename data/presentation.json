@@ -1,0 +1,8 @@
+{
+  "visuals": [
+    {"id": "arena", "art": "art/background-review-v1/colosseum.png", "water": "assets/arena-water.png", "ring_radius_px": 469, "water_width_m": 3.2, "bridge_width_m": 3.0},
+    {"id": "sprites", "atlas": "art/sprite-review/atlas.json", "asset_dir": "assets/combat-sprites", "body_height_px": 106},
+    {"id": "impact", "sound": "assets/audio/beam-pulse.wav", "volume": 60, "hitstop_s": 0.055, "flash_s": 0.115, "number_s": 0.65, "rise_m": 1.15, "shake_s": 0.28, "shake_m": 0.22, "max_shake_m": 0.32},
+    {"id": "parry", "push_m": 0.62, "push_s": 0.75, "raise_s": 0.5, "success_lift_s": 0.13}
+  ]
+}
