@@ -39,60 +39,112 @@ def sprites():
         flash.save(directory/f'{actor}-{action}-flash.png',optimize=True)
 
 
+def shore_depths(samples):
+    """Trace the sandstone edge in the source painting, clockwise from east."""
+    def sample(angle):
+        pos = angle % math.tau / math.tau * len(samples)
+        i = int(pos)
+        t = pos - i
+        a,b,c,d = (samples[(i+j) % len(samples)] for j in (-1,0,1,2))
+        return b + .5*t*(c-a+t*(2*a-5*b+4*c-d+t*(3*(b-c)+d-a)))
+    return sample
+
+
 def water():
     settings = SETTINGS['arena']
     scale = json.loads((ROOT/'data/scale.json').read_text(encoding='utf-8'))
     radius_m = scale['viewports'][0]['height_m']*scale['arenas'][0]['diameter_height_ratio']/2
     radius = settings['ring_radius_px']
-    width = settings['water_width_m']*radius/radius_m
+    drop = settings['bank_drop_px']
     bridge = settings['bridge_width_m']*radius/radius_m
+    shore = shore_depths(settings['shore_px'])
     with Image.open(ROOT/settings['art']) as source:
         size = source.size
     cx,cy = size[0]/2,size[1]/2
     texture = Image.new('RGBA',size)
     pixels = texture.load()
-    outer = radius+width
-    for y in range(int(cy-outer-2),int(cy+outer+3)):
-        for x in range(int(cx-outer-2),int(cx+outer+3)):
+    limit = max(settings['shore_px']) + 8
+    for y in range(int(cy-limit),int(cy+limit)+1):
+        for x in range(int(cx-limit),int(cx+limit)+1):
             dx,dy = (x-cx,y-cy)
-            depth = math.hypot(dx,dy)-radius
-            if not 0 <= depth <= width:
+            r = math.hypot(dx,dy)
+            if not radius-2 <= r <= limit:
                 continue
-            waves = math.sin(dy*.34+math.sin(dx*.07))+math.sin(dy*.73-dx*.13)
-            speckle = ((x*317+y*79+x*y*13)%11)/3
-            if depth < 4 or depth > width-4:
-                color = (76,64,48) if 1.5 < depth < width-1.5 else (116,93,65)
-            else:
-                light = 4*waves+speckle+max(0,5-depth*.2)
-                color = tuple(int(c+light) for c in (27,67,77))
-            pixels[x,y] = (*color,255)
+            theta = math.atan2(dy,dx)
+            outer = shore(theta)
+            if r > outer:
+                continue
+            front = max(0,dy/r)
+            # Water is below the sand. The near edge exposes a dark stone face;
+            # at the back that same face is hidden behind the island.
+            wall = 2.8 + drop*front
+            depth = r-radius
+            grain = (x*31+y*17+x*y*13)%9
+            if depth < wall:
+                joint = abs((theta*radius + math.sin(theta*93)*1.1) % 13.8) < 1.0
+                light = max(0,2-depth)*14 - (16 if joint else 0) + grain
+                base = (141,106,73) if depth < 1.4 else (83,65,49)
+                pixels[x,y] = (*tuple(max(0,int(c+light)) for c in base),255)
+                continue
+
+            stone_dist = outer-r
+            # Shade against both banks and pick up warm reflection from the old stone.
+            shade = 1 - .54*math.exp(-stone_dist/(4 + 6*max(0,-dy/r)))
+            shade -= .23*math.exp(-(depth-wall)/4)
+            warm = 10*math.exp(-stone_dist/10)
+            wave = math.sin(dy*(.6-.15*dy/r)+math.sin(dx*.038))
+            glint = 3*wave + 2*math.sin(dy*.28+dx*.13) + grain*.45
+            base = (53+warm,74+warm*.38,71-warm*.43)
+            color = tuple(max(0,int(c*shade+glint)) for c in base)
+            # Let the original paving still define the outer silhouette.
+            pixels[x,y] = (*color,min(255,round(stone_dist*90)))
     draw = ImageDraw.Draw(texture)
     rng = random.Random(72)
-    for _ in range(360):
-        u = rng.uniform(0,math.tau)
-        r = radius+rng.uniform(7,width-7)
-        x,y = cx+r*math.cos(u),cy+r*math.sin(u)
-        span = rng.randint(2,8)
-        if radius+4 < math.hypot(x+span-cx,y-cy) < outer-4:
-            draw.line((x,y,x+span,y),fill=rng.choice(('#386772','#4c7479','#315865')))
+    for _ in range(1150):
+        angle = rng.uniform(0,math.tau)
+        near = (1+math.sin(angle))/2
+        r = rng.uniform(radius+11,shore(angle)-6)
+        x,y = cx+r*math.cos(angle),cy+r*math.sin(angle)
+        span = rng.uniform(3,10+17*near)
+        if all(pixels[round(x+d),round(y)][1] > 54
+               and pixels[round(x+d),round(y)][2] > 48
+               and abs(math.hypot(x+d-cx,y-cy)-radius) > drop+5 for d in (0,span/2,span)):
+            # Low, broken, predominantly horizontal glints follow the floor perspective.
+            color = rng.choice(('#4f655d','#52685f','#455c55','#687367'))
+            for start,end in ((0,span*.44),(span*.58,span)):
+                draw.line((x+start,y,x+end,y),fill=color)
     for side in range(4):
         angle = side*math.pi/2
         fx,fy = round(math.cos(angle)),round(math.sin(angle))
+        outer = shore(angle)
+        half = bridge*.5*(1 + .16*fy)
         def point(distance, offset):
-            return (cx+fx*distance-fy*offset,cy+fy*distance+fx*offset)
-        def plank(a,b,left,right,color,outline=None):
+            perspective = 1 + .10*fy*(distance-radius)/(outer-radius)
+            return cx+fx*distance-fy*offset*perspective,cy+fy*distance+fx*offset*perspective
+        def slab(a,b,left,right,color,outline=None):
             draw.polygon([point(a,left),point(a,right),point(b,right),point(b,left)],
                          fill=color,outline=outline)
-        half = bridge*.5
-        plank(radius-6,outer+9,-half-5,half+5,'#453329','#2e2723')
-        for distance in range(radius-5,int(outer+8),6):
-            plank(distance,distance+5,-half,half,rng.choice(('#a57b50','#9b7149','#af8357')),'#694d37')
-            draw.line((point(distance+1,-half+3),point(distance+1,half-3)),fill='#bb8c5d')
-        for offset in (-half-1,half+1):
-            draw.line((point(radius-7,offset),point(outer+8,offset)),fill='#574029',width=4)
-            for distance in (radius-7,radius+width*.48,outer+8):
-                x,y = point(distance,offset)
-                draw.ellipse((x-3,y-3,x+3,y+3),fill='#9a7350',outline='#49392d')
+        top = (radius-6,outer+8,-half-2,half+2)
+        a,b,left,right = top
+        corners = [point(a,left),point(a,right),point(b,right),point(b,left)]
+        draw.polygon([(x+3,y+6) for x,y in corners],fill='#2c302a')
+        draw.polygon([(x+1,y+3) for x,y in corners],fill='#634b38')
+        slab(*top,'#6f5440','#4c3b31')
+        steps = list(range(radius-5,round(outer)+7,12))
+        for index,distance in enumerate(steps):
+            finish = min(distance+12,outer+8)
+            joint = half * (.28 if index % 2 else -.31)
+            for left,right in ((-half,joint),(joint,half)):
+                color = rng.choice(('#a17f5e','#ae8964','#947455','#b3926f'))
+                slab(distance,finish,left,right,color,'#775b43')
+                draw.line((point(distance+1,left+1),point(distance+1,right-1)),
+                          fill='#c2a07b')
+                for _ in range(7):
+                    spot = point(rng.uniform(distance+2,max(distance+2,finish-2)),
+                                 rng.uniform(left+1,right-1))
+                    draw.point(spot,fill=rng.choice(('#9c7958','#ba9670','#a28261')))
+            for left,right in ((-half-2,-half+3),(half-3,half+2)):
+                slab(distance,finish,left,right,'#c39b72','#805e45')
     texture.save(ROOT/settings['water'],optimize=True)
 
 

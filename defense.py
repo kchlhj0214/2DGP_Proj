@@ -155,5 +155,3 @@ class PlayerCombat:
         if self.time < self.success_invuln_until:
             draw_sector(self.owner.x, self.owner.y, 0, 1.2, 2 * pi,
                         self.owner.camera, (168, 249, 187))
-        if self.beam:
-            self.beam.draw()

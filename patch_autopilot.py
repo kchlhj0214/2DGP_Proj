@@ -1,6 +1,7 @@
 """Exercise the real player and enemies only during a Patch Desktop test."""
 
 import pico2d
+from combat_data import ENEMIES
 
 
 class PatchRound:
@@ -44,7 +45,7 @@ class PatchRound:
         elif self.index == 0 and self.age >= 1.15:
             if len(self.mode.arena.art) == 2 and player.y > 26 and player.visual_motion == 'run':
                 player.pressed_keys.clear()
-                self.spawn('melee', 1.6)
+                self.spawn('melee', ENEMIES['melee']['stop_m'])
                 self.target_x = self.enemy.x
                 combat.aim = 0
                 self.write('pass')

@@ -110,7 +110,8 @@ def render():
     pico2d.clear_canvas()
     pico2d.draw_rectangle(0, 0, camera.width_px, camera.height_px,
                           57, 43, 35, filled=True)
-    game_world.render()
+    beam = player.combat.beam
+    game_world.render(beam.draw if beam else None)
     player.effects.draw()
     pico2d.update_canvas()
 

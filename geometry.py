@@ -30,6 +30,8 @@ def intersects(first, second):
 
 def circle_intersects_polygon(x, y, radius, points):
     """원과 볼록 다각형의 정확한 가장자리/내부 판정."""
+    if len(points) < 3:
+        return False
     crosses = []
     for start, end in zip(points, points[1:] + points[:1]):
         dx, dy = end[0] - start[0], end[1] - start[1]

@@ -16,9 +16,10 @@ from enemy import MeleeEnemy
 from geometry import box_points, intersects, oriented_box
 
 
-def actor(x=1.6, y=0, identifier='one'):
+def actor(x=None, y=0, identifier='one'):
     arena, player, camera = scene()
-    enemy = MeleeEnemy(identifier, ENEMIES['melee'], x, y, player)
+    spec = ENEMIES['melee']
+    enemy = MeleeEnemy(identifier, spec, spec['stop_m'] if x is None else x, y, player)
     player.targets = [enemy]
     return player, enemy
 
@@ -200,8 +201,8 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(player.combat.state, 'free')
 
     def test_beam_origin_follows_but_direction_stays_and_no_queued_guard(self):
-        player, enemy = actor(5, 0)
-        other = MeleeEnemy('other', ENEMIES['melee'], 10, 0, player)
+        player, enemy = actor(6, -3.1)
+        other = MeleeEnemy('other', ENEMIES['melee'], 11, -3.1, player)
         player.targets.append(other)
         player.combat.energy = 10
         player.combat.fire()
@@ -263,7 +264,7 @@ class CombatRenderTests(unittest.TestCase):
             play_mode.init()
             player = play_mode.player
             enemy = play_mode.enemies[0]
-            enemy.x, enemy.y = 1.6, 0
+            enemy.x, enemy.y = enemy.data['stop_m'], 0
             for other in play_mode.enemies[1:]:
                 other.take_damage(60)
             advance(player, [enemy], .55)
@@ -318,7 +319,7 @@ class CombatRenderTests(unittest.TestCase):
             self.assertTrue(all(e.hp == 60 for e in play_mode.enemies))
             # 실제로 회전하는 칼의 판정을 그린다.
             enemy = play_mode.enemies[0]
-            enemy.x, enemy.y = 1.6, 0
+            enemy.x, enemy.y = enemy.data['stop_m'], 0
             advance(play_mode.player, [enemy], .68)
             self.assertEqual(enemy.state, 'swing')
             play_mode.render()

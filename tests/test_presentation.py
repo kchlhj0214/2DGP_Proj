@@ -1,6 +1,6 @@
 """Stand-alone checks for damage feedback and the real parry displacement."""
 
-from math import hypot
+from math import dist, hypot, pi
 from unittest import TestCase
 from unittest.mock import Mock
 
@@ -20,14 +20,14 @@ class PresentationTests(TestCase):
         for blocked in (False, True):
             player, enemy = actor()
             if blocked:
-                blocker = MeleeEnemy('wall', ENEMIES['melee'], 2.7, 0, player)
+                blocker = MeleeEnemy('wall', ENEMIES['melee'], enemy.x + enemy.width + .2, 0, player)
                 player.targets.append(blocker)
             before = enemy.get_bb()
             advance(player, [enemy], .55)
             player.combat.right_down()
             advance(player, [enemy], .95)
             moved = enemy.get_bb()[0] - before[0]
-            expected = .2 if blocked else VISUALS['parry']['push_m']
+            expected = .2 if blocked else enemy.height * VISUALS['parry']['push_height_ratio']
             self.assertAlmostEqual(moved, expected, places=5)
             self.assertEqual(enemy.state, 'stunned')
             self.assertEqual((player.x, player.y), (0, 0))
@@ -56,6 +56,21 @@ class PresentationTests(TestCase):
             return strength
 
         self.assertGreater(fire(40), fire(10))
+
+    def test_beam_has_obtuse_tip_and_full_width_after_the_taper(self):
+        for step in range(8):
+            player, _ = actor()
+            player.combat.aim = step*pi/4
+            player.combat.energy = 40
+            player.combat.fire()
+            beam = player.combat.beam
+            tip, left, far_left, far_right, right = beam.polygon()
+            self.assertEqual(tip, beam.origin())
+            self.assertNotEqual(tip, (player.x,player.y))
+            self.assertAlmostEqual(dist(left,right), 3.6)
+            self.assertAlmostEqual(dist(far_left,far_right), 3.6)
+            # A negative dot product proves the two flare edges form an obtuse angle.
+            self.assertLess(sum((a-c)*(b-c) for a,b,c in zip(left,right,tip)), 0)
 
     def test_hp_loss_freezes_world_not_feedback_and_blocks_do_not_flash(self):
         pico2d.open_canvas(1280, 720)

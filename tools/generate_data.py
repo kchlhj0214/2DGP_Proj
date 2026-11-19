@@ -70,11 +70,12 @@ def generate():
 
 def validate_presentation(data):
     schemas = {
-        'arena': {'art', 'water', 'ring_radius_px', 'water_width_m', 'bridge_width_m'},
+        'arena': {'art', 'water', 'ring_radius_px', 'shore_px', 'bank_drop_px', 'bridge_width_m'},
         'sprites': {'atlas', 'asset_dir', 'body_height_px'},
         'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'number_s', 'rise_m',
                    'shake_s', 'shake_m', 'max_shake_m'},
-        'parry': {'push_m', 'push_s', 'raise_s', 'success_lift_s'},
+        'parry': {'push_height_ratio', 'push_s', 'raise_s', 'success_lift_s'},
+        'beam': {'taper_width_ratio'},
     }
     paths = {'art', 'water', 'atlas', 'asset_dir', 'sound'}
     rows = data.get('visuals', [])
@@ -84,6 +85,11 @@ def validate_presentation(data):
         if set(row) != schemas[row['id']] | {'id'}:
             raise ValueError(f'{row["id"]}: 누락되거나 알 수 없는 셀')
         for field, value in row.items():
+            if field == 'shore_px':
+                if (not isinstance(value, list) or len(value) != 16
+                        or any(type(v) is not int or v <= row['ring_radius_px'] + row['bank_drop_px'] for v in value)):
+                    raise ValueError('물길의 석벽 경계가 경기장 안쪽입니다.')
+                continue
             if field in paths and (not isinstance(value, str) or not value or not (ROOT / value).exists()):
                 raise ValueError(f'{field}: 없는 리소스')
             if field not in paths | {'id'} and (type(value) not in (int, float) or not isfinite(value) or value <= 0):
@@ -100,6 +106,13 @@ def validate_presentation(data):
         if action not in expected.get(actor,set()) or type(clip['frames']) is not int or clip['frames'] < 1:
             raise ValueError(f'잘못된 스프라이트 참조: {actor}/{action}')
         expected[actor].remove(action)
+        if actor == 'hero' and action in ('guard','guard_walk'):
+            anchors = clip.get('shield_px', [])
+            if (len(anchors) != 8 or any(len(row) != clip['frames'] for row in anchors)
+                    or any(len(point) != 2 or any(type(axis) is not int or not 0 <= axis < atlas['cell_px']
+                                                  for axis in point)
+                           for row in anchors for point in row)):
+                raise ValueError(f'방패 발사점 누락: {action}')
         source = ROOT / assets['atlas']
         if action == 'deflected':
             source = ROOT / assets['asset_dir'] / f'{actor}-{action}.png'
@@ -114,6 +127,9 @@ def validate_presentation(data):
         raise ValueError('피격 연출 길이 또는 음량 오류')
     if impact['max_shake_m'] <= impact['shake_m']:
         raise ValueError('최대 광선의 흔들림이 기본보다 작습니다')
+    beam = next(row for row in rows if row['id'] == 'beam')
+    if beam['taper_width_ratio'] >= .5:
+        raise ValueError('광선 시작부는 끝이 둔각이어야 합니다.')
     return data
 
 

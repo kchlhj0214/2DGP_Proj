@@ -104,7 +104,7 @@ class ScaleTests(unittest.TestCase):
             arena, player, camera = scene(width, height)
             ppm = camera.pixels_per_meter
             self.assertAlmostEqual(arena.radius * 2 * ppm, height * 1.75)
-            self.assertAlmostEqual(player.height * ppm, height * .05)
+            self.assertAlmostEqual(player.height * ppm, height * .20)
             self.assertAlmostEqual(player.width / player.height, .5)
             self.assertEqual(camera.to_screen(0, 0), (width / 2, height / 2))
 
@@ -226,14 +226,15 @@ class RenderTests(unittest.TestCase):
                     play_mode.render()
                     background = read_canvas(1280, 720)
                 changed = []
-                for y in range(338, 382):
-                    for x in range(620, 661):
+                for y in range(255, 465):
+                    for x in range(540, 741):
                         offset = (y * 1280 + x) * 4
                         if raw[offset:offset + 3] != background[offset:offset + 3]:
                             changed.append((x, y))
                 self.assertTrue(changed, 'No actor was drawn near the camera center')
-                self.assertLessEqual(min(y for _, y in changed), 350)
-                self.assertGreaterEqual(max(y for _, y in changed), 369)
+                height = max(y for _, y in changed) - min(y for _, y in changed) + 1
+                self.assertGreaterEqual(height, 130)
+                self.assertLessEqual(height, 160)
                 self.assertLess(min(x for x, _ in changed), 640)
                 self.assertGreater(max(x for x, _ in changed), 640)
             shows_centered_sprite(raw)

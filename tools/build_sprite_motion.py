@@ -432,6 +432,7 @@ class Figure:
             self.poly([(x-4,y-5),(x,y-9),(x+4,y-5),(x,y-1)], '#e6b5fa', '#9d55d6')
 
     def shield(self, center):
+        self.shield_anchor = [round(value * SCALE) for value in center]
         x, y = center
         # Side-facing while relaxed. Turn the face toward the attack when raised.
         aim = min(1, max(0, (self.pose['shield_forward']-6)/11))
@@ -546,20 +547,30 @@ def build():
         frames = list(poses(clip))
         for actor in clip['actors']:
             sheet = Image.new('RGBA', (CELL*len(frames),CELL*len(DATA['directions'])))
+            emitters = []
             for direction in range(len(DATA['directions'])):
+                anchors = []
                 for i, pose in enumerate(frames):
-                    canvas = Figure(actor,direction,pose,DATA['gaits'].get(name)).render()
+                    figure = Figure(actor,direction,pose,DATA['gaits'].get(name))
+                    canvas = figure.render()
                     bbox = canvas.getbbox()
                     assert bbox and 0 < bbox[0] < bbox[2] < CELL and 0 < bbox[1] < bbox[3] < CELL, (
                         actor, name, direction, i, bbox
                     )
                     sheet.paste(canvas, (CELL*i,CELL*direction))
+                    if actor == 'hero' and name in ('guard','guard_walk'):
+                        anchors.append(figure.shield_anchor)
+                if anchors:
+                    emitters.append(anchors)
             path = f'{actor}-{name}.png'
             sheet.save(OUT/path, optimize=True)
-            manifest['clips'].append({
+            row = {
                 'actor': actor, 'action': name, 'file': path, 'frames': len(frames),
                 'loop': clip['loop'],
-            })
+            }
+            if emitters:
+                row['shield_px'] = emitters
+            manifest['clips'].append(row)
     (OUT/'atlas.json').write_text(json.dumps(manifest,indent=2)+'\n', encoding='utf-8')
     print(f"Exported {len(manifest['clips'])} sheets in {len(DATA['directions'])} directions.")
 

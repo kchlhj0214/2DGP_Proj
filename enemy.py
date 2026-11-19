@@ -58,7 +58,7 @@ class MeleeEnemy:
         old = min(1.0, self.recoil_age / duration)
         self.recoil_age += dt
         progress = min(1.0, self.recoil_age / duration)
-        travel = settings['push_m'] * ((1 - old)**1.3 - (1 - progress)**1.3)
+        travel = self.height * settings['push_height_ratio'] * ((1 - old)**1.3 - (1 - progress)**1.3)
         safe_step(self, cos(self.recoil_angle) * travel, sin(self.recoil_angle) * travel)
         if self.recoil_age > duration + 1 / 16:
             self.recoil_age = None

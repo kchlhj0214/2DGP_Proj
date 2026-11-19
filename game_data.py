@@ -12,7 +12,7 @@ ARENAS = {'arena': {'id': 'arena',
 
 CHARACTERS = {'player': {'id': 'player',
             'viewport_id': 'main',
-            'height_ratio': 0.05,
+            'height_ratio': 0.2,
             'width_height_ratio': 0.5,
             'boundary_height_ratio': 0.5,
             'speed_kmph': 14.0}}
