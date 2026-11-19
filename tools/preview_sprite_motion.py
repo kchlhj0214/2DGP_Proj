@@ -50,17 +50,17 @@ def pose_board():
         ('melee','chop','E',8,'근접 공격 · 찍어 내리기'),
         ('ranged','cast','SE',0,'원거리 공격 · 지팡이 발사'),
     ]
-    board = Image.new('RGB', (960,600), BG)
+    board = Image.new('RGB', (1158,722), BG)
     draw = ImageDraw.Draw(board)
     draw.text((30,18),'SHIELD ATTACK',font=font(29),fill=ACCENT)
-    draw.text((275,25),'2D 도트 모션',font=font(20),fill=TEXT)
+    draw.text((275,25),'전투 자세',font=font(20),fill=TEXT)
     for i, (actor,action,direction,frame,label) in enumerate(entries):
-        x = 18 + (i%3)*312
-        y = 74 + (i//3)*258
-        draw.rectangle((x,y,x+299,y+241), fill=PANEL)
-        draw.line((x+40,y+198,x+260,y+198), fill='#4c4048')
-        stamp(board,read_frames(actor,action,direction)[frame],(x+150,y+193),2)
-        draw.text((x+13,y+218),label,font=font(15),fill=TEXT)
+        x = 18 + (i%3)*376
+        y = 74 + (i//3)*316
+        draw.rectangle((x,y,x+363,y+301), fill=PANEL)
+        draw.line((x+28,y+255,x+336,y+255), fill='#4c4048')
+        stamp(board,read_frames(actor,action,direction)[frame],(x+180,y+251),2)
+        draw.text((x+16,y+274),label,font=font(17),fill=TEXT)
     board.save(OUT/'motion-board.png')
 
 
@@ -71,66 +71,69 @@ def parry_scene():
     guard = read_frames('hero','guard','W')
     frames = []
     for i in range(26):
-        canvas = Image.new('RGB',(600,320),BG)
+        canvas = Image.new('RGB',(830,420),BG)
         draw = ImageDraw.Draw(canvas)
-        draw.text((26,17),'내려치기 → 올려막기 → 칼 반동과 뒷걸음질',font=font(21),fill=TEXT)
-        draw.line((40,247,560,247), fill='#4c4048', width=2)
+        draw.text((26,17),'내려치기 → 올려막기 → 칼 반동과 뒷걸음질',font=font(23),fill=TEXT)
+        draw.line((62,337,768,337), fill='#4c4048', width=2)
         # Impact occurs on frame 8; the same contact pose opens the recoil clip.
         enemy = chop[i] if i<8 else bounce[min(i-8,len(bounce)-1)]
         hero = parry[max(0,i-3)] if i<3+len(parry) else guard[i%len(guard)]
-        stamp(canvas,enemy,(228,245),2)
-        stamp(canvas,hero,(378,245),2)
+        stamp(canvas,enemy,(302,335),2)
+        stamp(canvas,hero,(527,335),2)
         if i in (8,9):
-            x,y = 327,162
-            draw.line((x-13,y+7,x+14,y-6),fill='#fff1b8',width=3)
-            draw.line((x-6,y-11,x+6,y+9),fill='#f5c375',width=2)
-        draw.text((26,275),'근접 해골',font=font(15),fill=ACCENT)
-        draw.text((442,275),'방패 전사',font=font(15),fill=ACCENT)
+            x,y = 450,210
+            draw.line((x-20,y+10,x+21,y-9),fill='#fff1b8',width=4)
+            draw.line((x-9,y-16,x+9,y+14),fill='#f5c375',width=3)
+        draw.text((247,370),'근접 해골',font=font(18),fill=ACCENT)
+        draw.text((494,370),'방패 전사',font=font(18),fill=ACCENT)
         frames.append(canvas)
     gif('parry-and-recoil.gif',frames+[frames[-1]]*5)
 
 
 def movement_scene():
-    canvas_size = (780,466)
-    actors = ('hero','melee','ranged')
-    names = ('방패 전사','근접 해골','원거리 해골')
+    columns = [
+        ('방패 전사',('hero','guard_walk','SE','방패를 든 채 걷기'),
+         ('hero','run','E','달리기')),
+        ('근접 해골',('melee','walk','SE','걷기'),
+         ('melee','chop','W','내려치기')),
+        ('원거리 해골',('ranged','walk','SE','걷기'),
+         ('ranged','cast','W','지팡이 발사')),
+    ]
+    clips = {(actor,action):read_frames(actor,action,direction)
+             for _,top,bottom in columns for actor,action,direction,_ in (top,bottom)}
     frames = []
-    clips = {(actor,action):read_frames(actor,action,'SE') for actor in actors
-             for action in ('walk','run')}
-    casts = read_frames('ranged','cast','W')
-    chops = read_frames('melee','chop','W')
-    guard = read_frames('hero','guard','SE')
     for tick in range(24):
-        canvas = Image.new('RGB',canvas_size,BG)
+        canvas = Image.new('RGB',(1140,724),BG)
         draw = ImageDraw.Draw(canvas)
-        draw.text((24,15),'걷기 · 달리기 · 기본 방어와 공격',font=font(21),fill=TEXT)
-        for i,actor in enumerate(actors):
-            x=148+i*252
-            draw.text((x-37,57),names[i],font=font(17),fill=ACCENT)
-            for row,action in enumerate(('walk','run')):
-                y=190+row*123
-                draw.line((x-60,y+2,x+78,y+2),fill='#4c4048')
+        draw.text((24,16),'캐릭터 이동과 공격',font=font(24),fill=TEXT)
+        for i,(name,top,bottom) in enumerate(columns):
+            x=190+i*380
+            draw.text((x,75),name,font=font(19),fill=ACCENT,anchor='mm')
+            for y,(actor,action,_,label) in zip((318,679),(top,bottom)):
+                height = 226 if y == 318 else 279
+                draw.rectangle((x-175,y-height,x+175,y+32),fill=PANEL)
+                draw.line((x-145,y+2,x+145,y+2),fill='#4c4048')
                 clip = clips[actor,action]
-                stamp(canvas,clip[tick%len(clip)],(x,y))
-                draw.text((x-16,y+8),{'walk':'걷기','run':'달리기'}[action],font=font(14),fill=TEXT)
-            action = (guard,chops,casts)[i]
-            stamp(canvas,action[tick%len(action) if i==0 else min(tick,len(action)-1)],(x,427))
-            if i==2 and tick<12:
-                orb_x=x-53-tick*7
-                draw.ellipse((orb_x-4,363,orb_x+4,371),fill='#9e57d0')
-                draw.ellipse((orb_x-2,364,orb_x+2,368),fill='#eab1ff')
-            draw.text((x-30,434),('기본 방어','내려치기','지팡이 발사')[i],font=font(14),fill=TEXT)
+                loop = CLIPS[actor,action]['loop']
+                frame = tick%len(clip) if loop else min(tick,len(clip)-1)
+                stamp(canvas,clip[frame],(x,y),2)
+                if action == 'cast' and tick<7:
+                    orb_x = x-144-tick*14
+                    if orb_x > x-175:
+                        draw.ellipse((orb_x-8,y-183,orb_x+8,y-167),fill='#9e57d0')
+                        draw.ellipse((orb_x-3,y-180,orb_x+3,y-172),fill='#eab1ff')
+                draw.text((x,y+17),label,font=font(17),fill=TEXT,anchor='mm')
         frames.append(canvas)
     gif('movement-and-attacks.gif',frames)
 
 
 def directions_board():
-    board = Image.new('RGB',(900,468),BG)
+    board = Image.new('RGB',(1050,540),BG)
     draw = ImageDraw.Draw(board)
     draw.text((22,13),'8방향 기본 자세',font=font(21),fill=TEXT)
     for row,actor in enumerate(('hero','melee','ranged')):
         for col,direction in enumerate(ATLAS['directions']):
-            x,y = 63+col*110,160+row*135
+            x,y = 65+col*131,163+row*171
             stamp(board,read_frames(actor,'idle',direction)[0],(x,y))
             draw.text((x-8,y+12),direction,font=font(15),fill=ACCENT)
     board.save(OUT/'directions.png')
