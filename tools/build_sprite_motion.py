@@ -14,12 +14,12 @@ CELL = DATA['cell_px']
 SCALE = DATA['drawing_scale']
 OX, OY = [value / SCALE for value in DATA['origin_px']]
 INK = '#241d24'
-BONE = ('#837056', '#c8b696', '#f6e5c0')
-SKIN = ('#8f5541', '#c48861', '#eab285')
-BOOT = ('#3f2d29', '#6b493a', '#a57658')
-GOLD = ('#64412d', '#b78343', '#f5ce7d')
-STEEL = ('#4d5565', '#8397a8', '#d9e9e8')
-CLOTH = ('#382330', '#67404e', '#a16a72')
+BONE = ('#806b55', '#beaa8b', '#ead7b1')
+SKIN = ('#8b5641', '#bc825d', '#e0a77e')
+BOOT = ('#362720', '#634638', '#946f53')
+GOLD = ('#563a2b', '#a2754c', '#d5ab77')
+STEEL = ('#4e4949', '#817a77', '#c8bcb1')
+CLOTH = ('#362329', '#623d46', '#90636a')
 
 
 def validate():
@@ -174,8 +174,8 @@ class Figure:
         ankle = self.point(8*side, stride, 4+lift)
         toe = self.point(8*side, stride+5, max(1,2+lift+pitch))
         flesh = self.actor == 'hero'
-        self.segment(hip, knee, 8 if flesh else 4, SKIN if flesh else BONE)
-        self.segment(knee, ankle, 6 if flesh else 3, BOOT if flesh else BONE)
+        self.segment(hip, knee, 10 if flesh else 4, SKIN if flesh else BONE)
+        self.segment(knee, ankle, 7 if flesh else 3, BOOT if flesh else BONE)
         if flesh:
             self.boot(ankle,toe)
             x,y = knee
@@ -198,18 +198,23 @@ class Figure:
         sx,sy = shoulder
         hx,hy = hips
         trailing = (-5-self.pose['lean']*.3)*self.fx
-        hem = hy+21
-        self.poly([(sx-10,sy),(sx+10,sy),(hx+12+trailing,hem-1),
-                   (hx+4+trailing,hem-3),(hx-3+trailing,hem+3),(hx-13+trailing,hem)], CLOTH[1])
+        hem = hy+23
+        self.poly([(sx-13,sy+2),(sx-7,sy-5),(sx+7,sy-5),(sx+14,sy+2),
+                   (hx+14+trailing,hem),(hx+9+trailing,hem-4),
+                   (hx+6+trailing,hem+3),(hx+2+trailing,hem-4),
+                   (hx-3+trailing,hem+5),(hx-7+trailing,hem-1),
+                   (hx-10+trailing,hem+3),(hx-15+trailing,hem)], CLOTH[1])
         self.poly([(sx-8,sy+2),(hx-10+trailing,hem-1),(hx-5+trailing,hem-2),
                    (sx-2,sy+2)], CLOTH[2], None)
         self.poly([(sx+3,sy+2),(hx-1+trailing,hem),(hx+4+trailing,hem-4),
                    (sx+8,sy+3)], CLOTH[0], None)
+        self.draw.line((sx-12,sy+1,sx-7,sy-2,sx+1,sy+1,sx+7,sy-2,sx+12,sy+1),
+                       fill=CLOTH[2])
 
     def torso(self, shoulder, hips):
         sx, sy = shoulder
         hx, hy = hips
-        w = (14 if self.actor == 'hero' else 10)*self.width
+        w = (16 if self.actor == 'hero' else 10)*self.width
         if self.actor == 'hero':
             self.poly([(sx-w,sy+1),(sx-w+4,sy-4),(sx+w-4,sy-4),(sx+w,sy+1),
                        (hx+8,hy-6),(hx+7,hy),(hx-8,hy),(hx-9,hy-5)], SKIN[1])
@@ -225,6 +230,10 @@ class Figure:
                           '#ad6f50', None)
                 for y in (hy-10, hy-6):
                     self.draw.line((hx-4,y,hx+2,y-1), fill=SKIN[2])
+                self.draw.line((sx-8,sy+2,sx-8,sy+5,sx-7,sy+7),fill='#825445')
+                self.draw.line((sx-9,sy+4,sx-6,sy+5),fill='#a36f55')
+                for dx in (-7,7):
+                    self.draw.point((sx+dx*self.width,sy+6),fill='#885845')
         else:
             self.segment((sx,sy), (hx,hy-2), 4, BONE)
             for i in range(4):
@@ -233,6 +242,16 @@ class Figure:
                 self.draw.line([(round(sx-r),y-1),(sx,y+2),(round(sx+r),y-1)], fill=BONE[0], width=3)
                 self.draw.line([(round(sx-r),y-2),(sx,y+1),(round(sx+r),y-2)], fill=BONE[2])
             self.draw.line((sx-8,sy,sx,sy+3,sx+8,sy),fill=BONE[2],width=2)
+            if self.actor == 'melee':
+                side = -1 if self.back else 1
+                start = (sx+side*8*self.width,sy)
+                end = (hx-side*6,hy-4)
+                self.segment(start,end,3.8,BOOT)
+                self.oval(sx+side*2,sy+7,2.7,2.7,GOLD[1])
+            else:
+                self.draw.line((sx-10,sy-2,sx-4,sy,sx,sy+4,sx+6,sy+1,sx+10,sy-1),
+                               fill=CLOTH[0],width=3)
+                self.oval(sx,sy+5,2.7,2.7,GOLD[1])
         fabric = BOOT if self.actor == 'hero' else CLOTH
         self.poly([(hx-9,hy-1),(hx+9,hy-1),(hx+12,hy+10),
                    (hx+5,hy+8),(hx,hy+12),(hx-5,hy+8),(hx-11,hy+10)], fabric[1])
@@ -241,10 +260,16 @@ class Figure:
         if self.actor == 'hero':
             self.draw.line((hx-10,hy+8,hx-6,hy+6,hx-1,hy+9,hx+5,hy+6,hx+10,hy+8),
                            fill='#b49975')
+        else:
+            for dx,dy in ((-8,6),(-4,8),(1,9),(5,7)):
+                x,y = hx+dx,hy+dy
+                self.poly([(x-2,y-4),(x+2,y-3),(x,y+2)],fabric[0],None)
         self.draw.line((hx-8,hy,hx+8,hy), fill=GOLD[0], width=3)
         if not self.back:
-            self.draw.rectangle((hx-2,hy-1,hx+2,hy+2), fill=GOLD[1])
-            self.draw.point((hx-1,hy-1), fill=GOLD[2])
+            self.draw.rectangle((hx-3,hy-2,hx+3,hy+2),outline=GOLD[2] if self.actor!='hero' else STEEL[1])
+            self.draw.point((hx-1,hy),fill=GOLD[1])
+        for dx in (-7,-5,5,7):
+            self.draw.point((hx+dx,hy),fill=GOLD[2])
 
     def head(self, x, y):
         self.oval(x, y, 8, 9, SKIN[1] if self.actor == 'hero' else BONE[1])
@@ -300,7 +325,9 @@ class Figure:
     def arm(self, side):
         p = self.pose
         swing = self.foot_pose(side)[3] if self.gait else -p['stride']*side*.48
-        shoulder = self.point(side*13, p['lean']+swing*.13, 49-p['crouch'])
+        shoulder_forward = p['lean']+swing*.13
+        shoulder_up = 49-p['crouch']
+        shoulder = self.point(side*13,shoulder_forward,shoulder_up)
         equipment = side == (1 if self.actor == 'hero' else -1)
         forward = swing
         lift = 0
@@ -316,23 +343,43 @@ class Figure:
             forward += 8
             lift = 7+max(0,swing)*.24
         elbow_setback = 7 if running else 3
-        hand = self.point(side*14,forward+p['lean']*.25,26+lift-p['crouch'])
-        elbow = self.point(side*17,(forward+p['lean'])*.38-elbow_setback,
-                           39+lift*.35-p['crouch'])
+        hand_forward = forward+p['lean']*.25
+        hand_up = 26+lift-p['crouch']
+        hand = self.point(side*14,hand_forward,hand_up)
+        if equipment and self.actor == 'hero':
+            # Solve the two arm segments in the plane of the shield's swing.
+            # As the wrist reaches overhead, the bend falls naturally to near zero.
+            dx,dy = hand_forward-shoulder_forward,hand_up-shoulder_up
+            length = math.hypot(dx,dy)
+            bend = math.sqrt(max(0,15.5**2-(length*.5)**2))/max(length,1)
+            elbow = self.point(side*16,shoulder_forward+dx*.5+dy*bend,
+                               shoulder_up+dy*.5-dx*bend)
+        else:
+            elbow = self.point(side*17,(forward+p['lean'])*.38-elbow_setback,
+                               39+lift*.35-p['crouch'])
         flesh = self.actor == 'hero'
         colors = SKIN if flesh else CLOTH if self.actor == 'ranged' else BONE
-        thickness = 7 if flesh or self.actor == 'ranged' else 3
+        thickness = 9 if flesh else 6 if self.actor == 'ranged' else 3
         self.segment(shoulder, elbow, thickness, colors)
         self.segment(elbow, hand, thickness-1, colors)
         if flesh:
+            self.oval(*shoulder,4.3,4.8,SKIN[1],None)
+            self.draw.line((shoulder[0]-3,shoulder[1]-2,shoulder[0]-1,shoulder[1]-3,
+                           shoulder[0]+2,shoulder[1]-2),fill=SKIN[2])
             band = tuple(a+(b-a)*.41 for a,b in zip(elbow,hand))
             self.segment(band,hand,thickness-2,BOOT)
             self.draw.line((band[0]-2,band[1],band[0]+2,band[1]), fill=GOLD[1])
+            mid = tuple((a+b)*.5 for a,b in zip(band,hand))
+            self.draw.line((mid[0]-1.8,mid[1],mid[0]+2,mid[1]),fill=BOOT[0],width=2)
+            self.draw.point((mid[0]+1,mid[1]),fill=STEEL[2])
             self.oval(*hand,2.8,2.6,SKIN[1])
         if self.actor == 'melee' and side == 1:
             x, y = shoulder
             for dy in (4,2,0):
                 self.oval(x,y+dy,7-dy//2,3,STEEL[1],GOLD[0])
+            self.draw.line((x-5,y-1,x-2,y-2,x+2,y-2,x+5,y-1),fill=STEEL[2])
+            for dx in (-4,4):
+                self.draw.point((x+dx,y+3),fill=GOLD[2])
         if equipment:
             if flesh:
                 self.shield(hand)
@@ -350,7 +397,7 @@ class Figure:
         w = 6+8*abs(normal)
         self.oval(x+1,y+1,w+2,15,GOLD[0])
         self.oval(x,y,w+1.5,15,GOLD[1])
-        self.oval(x,y-1,w+.6,13.8,GOLD[2],None)
+        self.oval(x,y-1,w+.6,13.8,GOLD[1],None)
         wood = normal < -.15
         self.oval(x,y,w-1,12,'#775037' if wood else '#383742')
         if wood:
@@ -362,6 +409,8 @@ class Figure:
                 angle = index*math.tau/10+math.pi/10
                 rx,ry = x+math.cos(angle)*(w-2.5),y+math.sin(angle)*9.7
                 self.draw.line((rx-.55,ry+.7,rx,ry-.6,rx+.75,ry+.25),fill=GOLD[1])
+            for dx,dy in ((-.38,-5),(.37,3),(.56,-5),(-.62,4),(.31,7)):
+                self.draw.line((x+w*dx,y+dy,x+w*dx+1.1,y+dy-.7),fill='#5c514a')
         self.draw.line((x,y-11,x,y+11),fill=GOLD[0],width=3)
         self.draw.line((x-.65,y-11,x-.65,y+10),fill=GOLD[1])
         self.draw.line((x-w+2,y,x+w-2,y),fill=GOLD[0],width=3)
@@ -372,6 +421,12 @@ class Figure:
             self.draw.line((x-1.5,y+.4,x-1,y-1.35,x+.3,y-1.8),fill='#c9fff2')
         for dx,dy in ((-.76,-7),(.76,-7),(-.76,7),(.76,7)):
             self.draw.point((x+w*dx,y+dy),fill=GOLD[2])
+        for index in range(12):
+            angle = index*math.tau/12
+            rx,ry = x+math.cos(angle)*w,y+math.sin(angle)*13.2
+            self.draw.point((rx,ry),fill=GOLD[0])
+            if index not in (1,2,3):
+                self.draw.point((rx-.55,ry-.55),fill=GOLD[2])
 
     def weapon(self, grip):
         angle = math.radians(self.pose['blade_angle'])
