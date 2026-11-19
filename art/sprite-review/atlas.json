@@ -1,0 +1,118 @@
+{
+  "fps": 16,
+  "origin_px": [
+    72,
+    102
+  ],
+  "cell_px": 144,
+  "directions": [
+    "S",
+    "SE",
+    "E",
+    "NE",
+    "N",
+    "NW",
+    "W",
+    "SW"
+  ],
+  "clips": [
+    {
+      "actor": "hero",
+      "action": "idle",
+      "file": "hero-idle.png",
+      "frames": 1,
+      "loop": true
+    },
+    {
+      "actor": "melee",
+      "action": "idle",
+      "file": "melee-idle.png",
+      "frames": 1,
+      "loop": true
+    },
+    {
+      "actor": "ranged",
+      "action": "idle",
+      "file": "ranged-idle.png",
+      "frames": 1,
+      "loop": true
+    },
+    {
+      "actor": "hero",
+      "action": "walk",
+      "file": "hero-walk.png",
+      "frames": 8,
+      "loop": true
+    },
+    {
+      "actor": "melee",
+      "action": "walk",
+      "file": "melee-walk.png",
+      "frames": 8,
+      "loop": true
+    },
+    {
+      "actor": "ranged",
+      "action": "walk",
+      "file": "ranged-walk.png",
+      "frames": 8,
+      "loop": true
+    },
+    {
+      "actor": "hero",
+      "action": "run",
+      "file": "hero-run.png",
+      "frames": 8,
+      "loop": true
+    },
+    {
+      "actor": "melee",
+      "action": "run",
+      "file": "melee-run.png",
+      "frames": 8,
+      "loop": true
+    },
+    {
+      "actor": "ranged",
+      "action": "run",
+      "file": "ranged-run.png",
+      "frames": 8,
+      "loop": true
+    },
+    {
+      "actor": "hero",
+      "action": "guard",
+      "file": "hero-guard.png",
+      "frames": 8,
+      "loop": true
+    },
+    {
+      "actor": "hero",
+      "action": "parry",
+      "file": "hero-parry.png",
+      "frames": 16,
+      "loop": false
+    },
+    {
+      "actor": "melee",
+      "action": "chop",
+      "file": "melee-chop.png",
+      "frames": 16,
+      "loop": false
+    },
+    {
+      "actor": "melee",
+      "action": "deflected",
+      "file": "melee-deflected.png",
+      "frames": 13,
+      "loop": false
+    },
+    {
+      "actor": "ranged",
+      "action": "cast",
+      "file": "ranged-cast.png",
+      "frames": 8,
+      "loop": false
+    }
+  ]
+}
