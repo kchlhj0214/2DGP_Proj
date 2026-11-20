@@ -1,6 +1,7 @@
 """Build the 256 px character atlases from the approved PixelLab artwork."""
 
 import argparse
+from collections import Counter
 from dataclasses import dataclass
 import json
 import math
@@ -21,6 +22,7 @@ SIDES = ("right", "left")
 SOURCE = ROOT / "art/pixellab-motion/rotations"
 ASSETS = ROOT / "assets/pixellab-sprites"
 UNDERPAINT = SOURCE.parent / "underpaint"
+PIXEL_NEIGHBORS = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
 
 
 def distance_to_segment(x, y, start, end):
@@ -38,6 +40,66 @@ def rgba_layer(source, mask, overlap=1):
     result = Image.fromarray(source.copy())
     result.putalpha(alpha)
     return result
+
+
+def pixel_regions(mask):
+    pixels = set(map(tuple, np.argwhere(mask).tolist()))
+    while pixels:
+        part = [pixels.pop()]
+        for y, x in part:
+            for dy, dx in PIXEL_NEIGHBORS:
+                nearby = y + dy, x + dx
+                if nearby in pixels:
+                    pixels.remove(nearby)
+                    part.append(nearby)
+        yield part
+
+
+def reassign_fragments(owners, opacity, forearms):
+    """Keep loose scraps of cloth attached to the torso or leg they came from."""
+    result = owners.copy()
+    height, width = owners.shape
+    for owner in forearms:
+        regions = pixel_regions((owners == owner) & opacity)
+        # The largest region is the bone itself. Reconnect smaller fringes at their
+        # original seam, leaving intentional isolated details like magic sparks alone.
+        for region in sorted(regions, key=len, reverse=True)[1:]:
+            neighbors = Counter()
+            for y, x in region:
+                for dy, dx in PIXEL_NEIGHBORS:
+                    py, px = y + dy, x + dx
+                    if 0 <= py < height and 0 <= px < width and opacity[py, px]:
+                        other = int(owners[py, px])
+                        if other not in (owner - 1, owner, *forearms):
+                            neighbors[other] += 1
+            if neighbors:
+                ys, xs = zip(*region)
+                result[ys, xs] = neighbors.most_common(1)[0][0]
+    return result
+
+
+def close_joint_seam(frame, center, radius, gap):
+    """Join close edges at a known joint, retaining the nearest source color."""
+    cx, cy = round(center.real), round(center.imag)
+    left, top = max(0, cx - radius), max(0, cy - radius)
+    right, bottom = min(frame.width, cx + radius + 1), min(frame.height, cy + radius + 1)
+    box = left, top, right, bottom
+    patch = frame.crop(box)
+    alpha = patch.getchannel("A")
+    mask = np.asarray(alpha) > 0
+    shape = alpha.filter(ImageFilter.MaxFilter(2 * gap + 1)).filter(ImageFilter.MinFilter(2 * gap + 1))
+    y, x = np.indices(mask.shape)
+    near_joint = (x + left - cx) ** 2 + (y + top - cy) ** 2 <= (radius - gap) ** 2
+    missing = np.argwhere((np.asarray(shape) > 0) & ~mask & near_joint)
+    if len(missing) == 0:
+        return
+    original = np.asarray(patch)
+    stitched = original.copy()
+    solid = np.argwhere(mask)
+    for py, px in missing:
+        sy, sx = solid[((solid[:, 0] - py) ** 2 + (solid[:, 1] - px) ** 2).argmin()]
+        stitched[py, px] = original[sy, sx]
+    frame.paste(Image.fromarray(stitched), (left, top))
 
 
 @dataclass
@@ -63,9 +125,19 @@ class Rig:
         self.base = complex(sum(p.real for p in feet) / 2, max(p.imag for p in feet) + 2)
         self.scale = RIGS["body_height_px"] / (self.base.imag - self.joints["head"].imag)
         self.offset = ORIGIN - self.base * self.scale
-        self.pieces, self.gear, self.gear_center = self.split(image, marks["gear"], underpaint)
+        fringe_joints = marks.get("fringe_joints", ())
+        if actor == "ranged":
+            fringe_joints = ("right_hand", "left_hand")
+        self.pieces, self.gear, self.gear_center = self.split(image, marks["gear"], underpaint, fringe_joints)
+        self.grip_patch = None
+        if actor == "ranged":
+            source = np.asarray(image)
+            y, x = np.indices(source.shape[:2])
+            grip = self.joints[self.grip]
+            mask = ((x - grip.real) / 14) ** 2 + ((y - grip.imag) / 6) ** 2 <= 1
+            self.grip_patch = rgba_layer(source, mask, overlap=0)
 
-    def split(self, image, gear, underpaint):
+    def split(self, image, gear, underpaint, fringe_joints):
         source = np.asarray(image)
         y, x = np.indices(source.shape[:2])
         a, b = (complex(*p) for p in gear["points"][:2])
@@ -78,9 +150,16 @@ class Rig:
             mask = np.asarray(stencil)
             center = sum(complex(*p) for p in gear["points"]) / len(gear["points"])
         else:
-            mask = distance_to_segment(x, y, a, b) <= gear["points"][2][0] ** 2
+            radius = gear["points"][2][0]
+            if self.actor == "ranged":
+                radius = radius + 6 * (y < a.imag + 39)
+            mask = distance_to_segment(x, y, a, b) <= radius ** 2
             center = (a + b) / 2
         gear_image = rgba_layer(source, mask, overlap=0)
+        if self.actor == "ranged" and gear["kind"] == "segment":
+            # Keep thin wood continuous where the source's shaft has a pixel-wide notch.
+            for i in range(6, 16):
+                close_joint_seam(gear_image, a + (b - a) * (i / 16), radius=11, gap=2)
         body = source.copy()
         body[mask, 3] = 0
         if underpaint is not None:
@@ -102,6 +181,20 @@ class Rig:
                 distance *= 0.66
             scores.append(distance)
         owners = np.argmin(scores, axis=0)
+        opaque = body[:, :, 3] > 0
+        if self.actor == "ranged":
+            red, green, blue = (body[:, :, channel].astype(int) for channel in range(3))
+            # The robe hangs from the belt and should not peel away with a shin.
+            cloth = ((y > self.joints["waist"].imag + 7)
+                     & (red > green + 5) & (blue >= green * .93) & (green < 95))
+            for side in SIDES:
+                foot = self.joints[f"{side}_foot"]
+                # Preserve the boots below the hem, including their dark outlines.
+                footwear = (y > foot.imag - 26) & (abs(x - foot.real) < 22)
+                cloth &= ~footwear
+            owners[cloth & opaque] = 1
+        forearms = [i for i, (name, _, _) in enumerate(bones) if name in fringe_joints]
+        owners = reassign_fragments(owners, opaque, forearms)
         pieces = [Piece(name, start, end, rgba_layer(body, owners == index, overlap=3))
                   for index, (name, start, end) in enumerate(bones)]
         return pieces, gear_image, center
@@ -148,6 +241,8 @@ class Rig:
                     if running and side != self.gear_side:
                         joints[f"{side}_elbow"] -= max(0, swing) * 0.21j
                         joints[f"{side}_hand"] -= max(0, swing) * 0.63j
+        if action == "stagger":
+            gear_turn, gear_pitch = self.stagger(joints, row)
         hand = joints[self.grip]
         if action in {"guard", "guard_walk", "parry"}:
             guard = self.forward * (row["shield_forward"] - 5) * 1.35
@@ -192,6 +287,29 @@ class Rig:
             joints[elbow_name] += swing * upper / (upper + forearm)
         return joints, gear_turn, gear_pitch
 
+    def stagger(self, joints, row):
+        lean = self.forward * row["lean"]
+        dip = row["crouch"] * .7j
+        for name in joints:
+            if not name.endswith(("knee", "foot")):
+                amount = .36 if name == "waist" or name.endswith("hip") else 1.0
+                joints[name] += lean * amount + dip
+        joints["head"] += lean * .2
+        for side, sign in zip(SIDES, (-1, 1)):
+            stepping = max(0, sign * row["stride"])
+            step = -self.forward * (row["retreat"] * .45 + stepping * 1.2)
+            lift = min(1, stepping / 8) * row["knee"]
+            joints[f"{side}_foot"] += step - lift * 1j
+            joints[f"{side}_knee"] += step * .48 - lift * .36j + dip * .37
+        # The staff follows the right wrist; the free hand catches the balance.
+        raise_staff = (row["blade_up"] - 4) * 1.23j
+        joints["right_elbow"] -= raise_staff * .47
+        joints["right_hand"] += self.forward * (row["blade_forward"] - 6) - raise_staff
+        joints["left_hand"] -= lean * .53 + abs(row["lean"]) * .65j
+        joints["left_elbow"] -= lean * .21 + abs(row["lean"]) * .22j
+        pitch = math.radians(row["blade_angle"] - 61)
+        return -math.sin(self.angle) * pitch, abs(math.cos(self.angle)) * pitch
+
     def transform(self, image, start, target, factor=1, vertical=1, opacity=1, axis=None):
         inverse = 1 / (self.scale * factor)
         target = self.offset + target * self.scale
@@ -229,8 +347,13 @@ class Rig:
                               complex(math.cos(turn), math.sin(turn)), math.cos(pitch))
         frame = Image.new("RGBA", (CELL, CELL))
         front = self.gear_side == self.near or self.forward.imag >= 0
+        grip_patch = None
+        if self.grip_patch is not None:
+            grip_patch = self.transform(self.grip_patch, grip, joints[self.grip])
         if not front:
             frame.alpha_composite(gear)
+            if grip_patch is not None:
+                frame.alpha_composite(grip_patch)
         order = ("foot", "knee", "hand", "elbow")
         pieces = sorted(self.pieces, key=lambda p: (6 if p.name == "head" else
                         3 if p.name == "body" else order.index(p.name.split("_")[1]) +
@@ -244,6 +367,14 @@ class Rig:
             frame.alpha_composite(self.transform(piece.image, start, target, factor, axis=end - start))
         if front:
             frame.alpha_composite(gear)
+            if grip_patch is not None:
+                frame.alpha_composite(grip_patch)
+        if self.actor == "ranged":
+            arm = joints["right_elbow"] * .24 + joints[self.grip] * .76
+            close_joint_seam(frame, self.offset + arm * self.scale, radius=16, gap=3)
+            for side in SIDES:
+                ankle = joints[f"{side}_knee"] * .34 + joints[f"{side}_foot"] * .66
+                close_joint_seam(frame, self.offset + ankle * self.scale, radius=15, gap=3)
         if action == "cast" and row["cast"] > 0.7:
             self.cast_sparks(frame, joints["left_hand"], row["cast"], index)
         center = (self.gear_center - grip) * complex(math.cos(turn), math.sin(turn))
@@ -370,6 +501,7 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
             if (len(marks["joints"]) != len(RIGS["joint_columns"])
                     or any(len(p) != 2 or any(type(v) is not int or not 0 <= v < CELL for v in p)
                            for p in marks["joints"] + marks["gear"]["points"])
+                    or any(name not in RIGS["joint_columns"] for name in marks.get("fringe_joints", ()))
                     or marks["gear"]["kind"] not in {"ellipse", "polygon", "segment"}):
                 raise ValueError(f"Incomplete rig for {actor} {direction}")
     destination.mkdir(parents=True, exist_ok=True)
@@ -397,6 +529,13 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
                     bbox = frame.getchannel("A").getbbox()
                     if bbox is None and (action not in RIGS["extra_clips"] or x != len(motion) - 1):
                         raise ValueError(f"Empty {name} {directions[y]} frame {x}")
+                    if bbox and (min(bbox[:2]) <= 0 or max(bbox[2:]) >= CELL):
+                        raise ValueError(f"Clipped {name} {directions[y]} frame {x}")
+                    if actor == "hero" and action in {"run", "guard_walk"}:
+                        regions = sorted(map(len, pixel_regions(np.asarray(frame.getchannel("A")) > 0)),
+                                         reverse=True)
+                        if len(regions) > 1 and regions[1] >= 36:
+                            raise ValueError(f"Separated limb in {name} {directions[y]} frame {x}")
                     sheet.paste(frame, (x * CELL, y * CELL))
                     centers.append([round(emitter.real), round(emitter.imag)])
                 emitters.append(centers)

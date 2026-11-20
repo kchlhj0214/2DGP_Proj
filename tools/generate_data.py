@@ -98,7 +98,7 @@ def validate_presentation(data):
     atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))
     expected = {'hero': {'idle','guard_walk','guard','run','parry'},
                 'melee': {'idle','walk','chop','deflected','collapse'},
-                'ranged': {'idle','walk','cast','ash'}}
+                'ranged': {'idle','walk','cast','stagger','ash'}}
     if atlas['directions'] != ['S','SE','E','NE','N','NW','W','SW'] or atlas['fps'] <= 0:
         raise ValueError('스프라이트 방향 또는 속도 오류')
     for clip in atlas['clips']:

@@ -15,7 +15,7 @@ LABELS = {
     "hero": "Shield fighter", "melee": "Skeleton knight", "ranged": "Ash warlock",
     "idle": "Idle", "guard_walk": "Guard walk", "run": "Run", "guard": "Guard",
     "parry": "Parry", "walk": "Walk", "chop": "Overhead chop", "deflected": "Parried",
-    "collapse": "Bone collapse", "cast": "Cast", "ash": "Ash",
+    "collapse": "Bone collapse", "cast": "Cast", "stagger": "Stagger", "ash": "Ash",
 }
 
 
