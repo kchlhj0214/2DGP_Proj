@@ -288,12 +288,19 @@ class Rig:
                 if name != "waist" and not name.endswith("hip"):
                     joints[name] += tilt
             joints["head"] += tilt * 0.29
-            stride_scale = {"run": 2.45, "guard_walk": 2.8}.get(action, 2.2)
+            stride_scale = {"run": 2.15, "guard_walk": 2.8}.get(action, 2.2)
+            feet_center = (self.joints["right_foot"] + self.joints["left_foot"]) / 2
             for side, phase in zip(SIDES, (0, len(gait) // 2)):
                 stride, lift, _, swing = gait[(index + phase) % len(gait)]
                 travel = self.forward * stride * stride_scale
-                joints[f"{side}_foot"] += travel - lift * 1.65j
-                joints[f"{side}_knee"] += travel * 0.52 - lift * (0.75 if running else 0.54) * 1j
+                foot, knee = f"{side}_foot", f"{side}_knee"
+                if running:
+                    stance = (self.joints[foot] - feet_center) / self.forward
+                    tuck = self.forward * complex(stance.real * .43, stance.imag * .12)
+                    joints[foot] -= tuck
+                    joints[knee] -= tuck * .55
+                joints[foot] += travel - lift * 1.65j
+                joints[knee] += travel * 0.52 - lift * (0.75 if running else 0.54) * 1j
                 if action != "guard_walk" or side != self.gear_side:
                     weight = 1.5
                     if side == self.gear_side:
