@@ -201,8 +201,10 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(player.combat.state, 'free')
 
     def test_beam_origin_follows_but_direction_stays_and_no_queued_guard(self):
-        player, enemy = actor(6, -3.1)
-        other = MeleeEnemy('other', ENEMIES['melee'], 11, -3.1, player)
+        player, enemy = actor(6)
+        # Keep the target's top edge in the initial beam but below it after moving up.
+        enemy.y = player.y - enemy.height / 2 + .3
+        other = MeleeEnemy('other', ENEMIES['melee'], 11, enemy.y, player)
         player.targets.append(other)
         player.combat.energy = 10
         player.combat.fire()

@@ -26,8 +26,12 @@ import game_world
 import play_mode
 from arena import Arena
 from camera import Camera
+from combat_data import ENEMIES
+from enemy import MeleeEnemy
 from game_data import ARENAS, CHARACTERS, VIEWPORTS
 from player import Player
+from ranged_enemy import RangedEnemy
+from wave_data import RANGED
 
 
 def scene(width=1920, height=1080):
@@ -104,8 +108,13 @@ class ScaleTests(unittest.TestCase):
             arena, player, camera = scene(width, height)
             ppm = camera.pixels_per_meter
             self.assertAlmostEqual(arena.radius * 2 * ppm, height * 1.75)
-            self.assertAlmostEqual(player.height * ppm, height * .20)
-            self.assertAlmostEqual(player.width / player.height, .5)
+            melee = MeleeEnemy('melee', ENEMIES['melee'], 0, 0, player)
+            ranged = RangedEnemy('ranged', RANGED['ranged'], 0, 0, player, None)
+            for actor in (player, melee, ranged):
+                self.assertAlmostEqual(actor.height * ppm, height * 2 / 15)
+                left, bottom, right, top = actor.get_bb()
+                self.assertAlmostEqual(right - left, 2.4)
+                self.assertAlmostEqual(top - bottom, 4.8)
             self.assertEqual(camera.to_screen(0, 0), (width / 2, height / 2))
 
     def test_equal_elapsed_time_gives_equal_distance(self):
@@ -233,8 +242,8 @@ class RenderTests(unittest.TestCase):
                             changed.append((x, y))
                 self.assertTrue(changed, 'No actor was drawn near the camera center')
                 height = max(y for _, y in changed) - min(y for _, y in changed) + 1
-                self.assertGreaterEqual(height, 130)
-                self.assertLessEqual(height, 160)
+                self.assertGreaterEqual(height, 87)
+                self.assertLessEqual(height, 107)
                 self.assertLess(min(x for x, _ in changed), 640)
                 self.assertGreater(max(x for x, _ in changed), 640)
             shows_centered_sprite(raw)
