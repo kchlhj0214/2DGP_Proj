@@ -9,6 +9,20 @@
     "right_hip", "right_knee", "right_foot",
     "left_hip", "left_knee", "left_foot"
   ],
+  "underpaint": {
+    "hero": {
+      "S": {"file": "hero-S.png", "mirror": false, "offset": [0, 0]},
+      "SE": {"file": "hero-SW.png", "mirror": true, "offset": [-7, 0]},
+      "E": {"file": "hero-W.png", "mirror": true, "offset": [13, 0]},
+      "W": {"file": "hero-W.png", "mirror": false, "offset": [0, 0]},
+      "SW": {"file": "hero-SW.png", "mirror": false, "offset": [0, 0]}
+    },
+    "melee": {
+      "E": {"direction": "SE", "box": [113, 103, 162, 157], "bounds": [108, 106, 162, 160]},
+      "NE": {"direction": "N", "box": [104, 111, 149, 157], "bounds": [115, 113, 164, 162]},
+      "W": {"direction": "SW", "box": [104, 104, 149, 157], "bounds": [99, 105, 145, 159]}
+    }
+  },
   "rigs": {
     "hero": {
       "S": {

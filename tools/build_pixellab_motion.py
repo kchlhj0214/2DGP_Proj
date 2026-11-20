@@ -8,7 +8,7 @@ from pathlib import Path
 import random
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +20,7 @@ DIRECTIONS = MOTION["directions"]
 SIDES = ("right", "left")
 SOURCE = ROOT / "art/pixellab-motion/rotations"
 ASSETS = ROOT / "assets/pixellab-sprites"
+UNDERPAINT = SOURCE.parent / "underpaint"
 
 
 def distance_to_segment(x, y, start, end):
@@ -48,7 +49,7 @@ class Piece:
 
 
 class Rig:
-    def __init__(self, actor, direction, image, marks):
+    def __init__(self, actor, direction, image, marks, underpaint):
         self.actor = actor
         self.image = image
         self.angle = math.tau * DIRECTIONS.index(direction) / len(DIRECTIONS)
@@ -62,9 +63,9 @@ class Rig:
         self.base = complex(sum(p.real for p in feet) / 2, max(p.imag for p in feet) + 2)
         self.scale = RIGS["body_height_px"] / (self.base.imag - self.joints["head"].imag)
         self.offset = ORIGIN - self.base * self.scale
-        self.pieces, self.gear, self.gear_center = self.split(image, marks["gear"])
+        self.pieces, self.gear, self.gear_center = self.split(image, marks["gear"], underpaint)
 
-    def split(self, image, gear):
+    def split(self, image, gear, underpaint):
         source = np.asarray(image)
         y, x = np.indices(source.shape[:2])
         a, b = (complex(*p) for p in gear["points"][:2])
@@ -82,6 +83,12 @@ class Rig:
         gear_image = rgba_layer(source, mask, overlap=0)
         body = source.copy()
         body[mask, 3] = 0
+        if underpaint is not None:
+            # The original render cannot show the torso and skirt behind the gear.
+            # Preserve the visible original and use the clean plate only inside the gear mask.
+            paint = np.asarray(underpaint)
+            covered = mask & (paint[:, :, 3] > 0)
+            body[covered] = paint[covered]
         bones = [("head", "head", "neck"), ("body", "neck", "waist")]
         for side in SIDES:
             for start, end in (("shoulder", "elbow"), ("elbow", "hand"),
@@ -95,7 +102,7 @@ class Rig:
                 distance *= 0.66
             scores.append(distance)
         owners = np.argmin(scores, axis=0)
-        pieces = [Piece(name, start, end, rgba_layer(body, owners == index))
+        pieces = [Piece(name, start, end, rgba_layer(body, owners == index, overlap=3))
                   for index, (name, start, end) in enumerate(bones)]
         return pieces, gear_image, center
 
@@ -197,6 +204,8 @@ class Rig:
             return self.ash(index), ORIGIN
         if action == "collapse":
             return self.collapse(index), ORIGIN
+        if action == "idle" and index == 0:
+            return self.transform(self.image, self.base, self.base), self.offset + self.gear_center * self.scale
         joints, turn, pitch = self.pose(action, index, row)
         grip = self.joints[self.grip]
         gear = self.transform(self.gear, grip, joints[self.grip],
@@ -264,6 +273,7 @@ class Rig:
             ))
         return frame
 
+
     def ash(self, index):
         original = self.transform(self.image, self.base, self.base)
         frame = Image.new("RGBA", (CELL, CELL))
@@ -293,6 +303,26 @@ class Rig:
                         color = tuple(min(255, v) for v in color)
                     draw.rectangle((dust_x, dust_y, dust_x + 1, dust_y + 1), fill=color)
         return frame
+
+
+def load_underpaint(actor, direction, source):
+    row = RIGS["underpaint"].get(actor, {}).get(direction)
+    if row is None:
+        return None
+    paint = Image.new("RGBA", (CELL, CELL))
+    if "file" in row:
+        image = Image.open(UNDERPAINT / row["file"]).convert("RGBA")
+        if image.size != paint.size:
+            raise ValueError(f"Wrong underpaint size for {actor}/{direction}")
+        if row["mirror"]:
+            image = ImageOps.mirror(image)
+        paint.paste(image, tuple(row["offset"]))
+    else:
+        left, top, right, bottom = row["bounds"]
+        image = Image.open(source / actor / f'{row["direction"]}.png').convert("RGBA")
+        patch = image.crop(row["box"]).resize((right - left, bottom - top), Image.Resampling.NEAREST)
+        paint.paste(patch, (left, top))
+    return paint
 
 
 def motion_rows(action, definition):
@@ -335,7 +365,7 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
             image = Image.open(source / actor / f"{direction}.png").convert("RGBA")
             if image.size != (CELL, CELL) or not image.getbbox():
                 raise ValueError(f"Invalid {actor} {direction} rotation")
-            rigs.append(Rig(actor, direction, image, marks))
+            rigs.append(Rig(actor, direction, image, marks, load_underpaint(actor, direction, source)))
         for action, definition in (MOTION["clips"] | RIGS["extra_clips"]).items():
             if actor not in definition["actors"]:
                 continue
