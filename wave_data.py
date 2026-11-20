@@ -46,7 +46,7 @@ RANGED = {'ranged': {'id': 'ranged',
             'range_m': 10,
             'attack_interval_s': 3,
             'projectile_speed_mps': 8,
-            'projectile_radius_m': 0.15,
+            'projectile_radius_m': 0.7,
             'damage': 10,
             'energy_gain': 10}}
 

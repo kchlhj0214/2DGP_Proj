@@ -43,6 +43,7 @@ class SpriteLibrary:
         self.cell = ATLAS['cell_px']
         self.anchor = ATLAS['origin_px']
         self.body_pixels = SETTINGS['body_height_px']
+        self.projectile = pico2d.load_image(str(ROOT / SETTINGS['projectile_art']))
         self.clips = {}
         for clip in ATLAS['clips']:
             actor, action = clip['actor'], clip['action']
@@ -66,3 +67,8 @@ class SpriteLibrary:
         size = self.cell * scale
         bottom = (7 - direction(angle)) * self.cell
         images[bool(flash)].clip_draw(index * self.cell, bottom, self.cell, self.cell, x, y, size, size)
+
+    def draw_projectile(self, projectile, camera):
+        x, y = camera.to_screen(projectile.x, projectile.y)
+        diameter = projectile.radius * 2 * camera.pixels_per_meter
+        self.projectile.draw(x, y, diameter, diameter)

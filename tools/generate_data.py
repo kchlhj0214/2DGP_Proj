@@ -71,13 +71,13 @@ def generate():
 def validate_presentation(data):
     schemas = {
         'arena': {'art', 'water', 'ring_radius_px', 'wall_base_px', 'bank_drop_px', 'bridge_width_m'},
-        'sprites': {'atlas', 'asset_dir', 'body_height_px'},
+        'sprites': {'atlas', 'asset_dir', 'body_height_px', 'projectile_art'},
         'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'number_s', 'rise_m',
                    'shake_s', 'shake_m', 'max_shake_m'},
         'parry': {'push_height_ratio', 'push_s', 'raise_s', 'success_lift_s'},
         'beam': {'taper_width_ratio'},
     }
-    paths = {'art', 'water', 'atlas', 'asset_dir', 'sound'}
+    paths = {'art', 'water', 'atlas', 'asset_dir', 'sound', 'projectile_art'}
     rows = data.get('visuals', [])
     if len(rows) != len(schemas) or {row.get('id') for row in rows} != set(schemas):
         raise ValueError('화면 연출 시트 누락')
