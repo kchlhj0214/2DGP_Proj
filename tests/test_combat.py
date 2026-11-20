@@ -77,9 +77,12 @@ class CombatTests(unittest.TestCase):
         player, _ = actor()
         combat = player.combat
         key(player, pico2d.SDL_KEYDOWN, pico2d.SDLK_d)
+        combat.energy = 10
         combat.right_down()
-        advance(player, [], .99)
+        advance(player, [], .5)
         self.assertEqual(player.x, 0)
+        advance(player, [], .49)
+        self.assertAlmostEqual(player.x, .49 * 22 / 3.6)
         self.assertFalse(combat.fire())
         combat.right_down()
         advance(player, [], .01)
@@ -91,6 +94,15 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(combat.state, 'free')
         combat.right_down()
         self.assertEqual(combat.state, 'raising')
+
+    def test_movement_lock_ends_inside_a_frame(self):
+        for dt in (1 / 240, 1 / 30, .57):
+            player, _ = actor()
+            key(player, pico2d.SDL_KEYDOWN, pico2d.SDLK_d)
+            player.combat.right_down()
+            advance(player, [], .57, dt=dt)
+            self.assertAlmostEqual(player.x, .07 * player.speed_mps)
+            self.assertEqual(player.visual_motion, 'run')
 
     def test_release_during_raise_does_not_cancel_lock(self):
         player, _ = actor()
@@ -133,10 +145,10 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(enemy.state, 'stunned')
         self.assertNotEqual(other.state, 'stunned')
         self.assertEqual(combat.success_invuln_until, until)
-        advance(player, [], .3)
+        advance(player, [], .449)
         self.assertEqual(combat.receive(3, other, 10, 10), 'invulnerable')
         self.assertEqual(combat.energy, 20)
-        advance(player, [], .65)
+        advance(player, [], .001)
         other.x = -1.6
         self.assertEqual(combat.receive(4, other, 10, 10), 'hit')
 

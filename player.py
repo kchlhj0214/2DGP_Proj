@@ -68,21 +68,22 @@ class Player:
 
     def update(self):
         dt = game_framework.frame_time
+        moving_dt = max(0.0, dt - self.combat.position_lock_remaining())
         self.combat.advance(dt)
         dx = int(pico2d.SDLK_d in self.pressed_keys) - int(pico2d.SDLK_a in self.pressed_keys)
         dy = int(pico2d.SDLK_w in self.pressed_keys) - int(pico2d.SDLK_s in self.pressed_keys)
         length = hypot(dx, dy)
         before = (self.x, self.y)
-        if length and self.combat.state not in ('raising', 'dead'):
+        if length and moving_dt > 1e-9 and self.combat.state != 'dead':
             speed = (self.combat.settings['guard_kmph'] / 3.6
                      if self.combat.state == 'guard' else self.speed_mps)
-            distance = speed * dt
+            distance = speed * moving_dt
             self.x, self.y = self.constrain_position(
                 self.x + dx / length * distance,
                 self.y + dy / length * distance)
         moved = hypot(self.x - before[0], self.y - before[1]) > 1e-9
         state = self.combat.state
-        if state in ('raising', 'guard'):
+        if state == 'guard' or self.combat.position_lock_remaining() > 1e-9:
             self.visual_angle = self.combat.aim
         elif state == 'beam':
             self.visual_angle = self.combat.beam.angle
@@ -99,7 +100,7 @@ class Player:
             return
         flash = self.effects and self.effects.flashing(self)
         motion, angle, frame = self.visual_motion, self.visual_angle, None
-        if self.combat.state == 'raising':
+        if self.combat.position_lock_remaining() > 1e-9:
             motion, angle, frame = 'parry', self.combat.aim, self.combat.parry_frame()
         elif self.combat.state == 'guard':
             motion = 'guard_walk' if motion == 'guard_walk' else 'guard'

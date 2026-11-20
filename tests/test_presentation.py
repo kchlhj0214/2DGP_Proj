@@ -13,6 +13,7 @@ from combat_data import ENEMIES
 from enemy import MeleeEnemy
 from impact_effects import ImpactEffects
 from presentation_data import VISUALS
+from projectile import Projectile
 from ranged_enemy import RangedEnemy
 from sprites import clip_duration
 from wave_data import RANGED
@@ -78,6 +79,27 @@ class PresentationTests(TestCase):
             self.assertAlmostEqual(moved, expected, places=5)
             self.assertEqual(enemy.state, 'stunned')
             self.assertEqual((player.x, player.y), (0, 0))
+
+    def test_success_pushes_nearby_enemies_in_the_parry_cone_once(self):
+        player, melee = actor(3, 3)
+        ranged = RangedEnemy('ranged', RANGED['ranged'], 3, -3, player, Mock())
+        outside = [MeleeEnemy(name, ENEMIES['melee'], x, y, player)
+                   for name, x, y in (('rear', -3, 0), ('flank', 0, 5), ('distant', 7, 0))]
+        dead = MeleeEnemy('dead', ENEMIES['melee'], 3, 0, player)
+        dead.take_damage(dead.hp)
+        player.targets.extend([ranged, *outside, dead])
+        bullet = Projectile('shot', 1, 0, pi, RANGED['ranged'], player)
+        player.combat.right_down()
+        self.assertEqual(player.combat.receive('shot', bullet, 10, 10), 'parry')
+        self.assertEqual((melee.recoil_age, ranged.recoil_age), (0, 0))
+        self.assertTrue(all(enemy.recoil_age is None for enemy in [*outside, dead]))
+        advance(player, [melee, ranged], .12)
+        self.assertGreater(hypot(melee.x, melee.y), hypot(3, 3))
+        self.assertGreater(hypot(ranged.x, ranged.y), hypot(3, 3))
+        self.assertEqual(ranged.shots, 0)
+        recoil = (melee.recoil_age, ranged.recoil_age)
+        self.assertEqual(player.combat.receive('sword', melee, 10, 10), 'parry')
+        self.assertEqual((melee.recoil_age, ranged.recoil_age), recoil)
 
     def test_three_equal_sound_triggers_and_stronger_max_shake(self):
         def fire(energy):

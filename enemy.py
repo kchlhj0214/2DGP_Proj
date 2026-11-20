@@ -47,15 +47,16 @@ class MeleeEnemy:
             self.attack_id = None
 
     def start_parry_recoil(self):
-        if self.sprite_actor != 'melee' or self.hp <= 0:
+        if self.hp <= 0:
             return
         dx, dy = self.x - self.player.x, self.y - self.player.y
         self.recoil_angle = atan2(dy, dx) if dx or dy else self.angle + pi
         self.recoil_age = 0.0
+        self.moving = False
 
     def advance_recoil(self, dt):
         if self.recoil_age is None:
-            return
+            return False
         settings = VISUALS['parry']
         duration = settings['push_s']
         old = min(1.0, self.recoil_age / duration)
@@ -65,6 +66,7 @@ class MeleeEnemy:
         safe_step(self, cos(self.recoil_angle) * travel, sin(self.recoil_angle) * travel)
         if self.recoil_age > duration + 1 / 16:
             self.recoil_age = None
+        return old < 1
 
     def take_damage(self, amount):
         if self.hp <= 0:
@@ -110,7 +112,9 @@ class MeleeEnemy:
         if self.player.combat.hp <= 0:
             return
         dt = game_framework.frame_time
-        self.advance_recoil(dt)
+        recoiling = self.advance_recoil(dt)
+        if recoiling and self.state != 'stunned':
+            return
         if self.state == 'chase':
             dx, dy = self.player.x - self.x, self.player.y - self.y
             distance = hypot(dx, dy)
@@ -156,7 +160,7 @@ class MeleeEnemy:
         return ('walk' if self.moving and self.state == 'chase' else 'idle'), None
 
     def draw_warning(self):
-        if self.state == 'windup':
+        if self.state == 'windup' and self.recoil_age is None:
             opacity = warning_strength(self.age, self.data['windup_s'])
             if opacity > 0:
                 draw_sweep_warning(self.x, self.y, self.angle,

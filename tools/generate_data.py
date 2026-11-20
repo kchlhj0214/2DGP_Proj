@@ -199,8 +199,8 @@ def validate_waves(data, scale, combat):
 def validate_combat(data, scale):
     from math import isfinite
     schemas = {
-        'systems': {'id', 'player_hp', 'guard_kmph', 'input_lock_s', 'success_invuln_s',
-                    'hit_invuln_s', 'stun_s', 'guard_angle_deg', 'energy_max',
+        'systems': {'id', 'player_hp', 'guard_kmph', 'input_lock_s', 'parry_move_lock_s',
+                    'success_invuln_s', 'hit_invuln_s', 'stun_s', 'guard_angle_deg', 'parry_push_range_m', 'energy_max',
                     'damage_multiplier', 'beam_duration_s', 'beam_tick_s', 'step_s'},
         'stages': {'id', 'energy_min', 'parry_window_s', 'beam_width_m'},
         'enemies': {'id', 'character_id', 'hp', 'speed_kmph', 'damage', 'energy_gain',
@@ -235,8 +235,9 @@ def validate_combat(data, scale):
         raise ValueError('축적 단계 경계가 중복되거나 순서가 잘못되었습니다.')
     if stages[0]['energy_min'] != 0 or stages[-1]['energy_min'] >= system['energy_max']:
         raise ValueError('단계 경계가 에너지 범위를 벗어납니다.')
-    if any(s['parry_window_s'] > system['input_lock_s'] for s in stages):
-        raise ValueError('패링 구간이 입력 잠금보다 깁니다.')
+    if (system['parry_move_lock_s'] > system['input_lock_s']
+            or any(s['parry_window_s'] > system['parry_move_lock_s'] for s in stages)):
+        raise ValueError('패링 구간, 위치 고정, 입력 잠금 순서가 잘못되었습니다.')
     if any(a['parry_window_s'] <= b['parry_window_s'] for a, b in zip(stages, stages[1:])):
         raise ValueError('축적 단계가 높을수록 패링 구간은 짧아야 합니다.')
     if not 0 < system['guard_angle_deg'] <= 360 or system['step_s'] > 1 / 60:

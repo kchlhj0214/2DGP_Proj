@@ -1,6 +1,6 @@
 """입력 잠금, 패링, 기본 방어, 무적과 에너지를 분리한 전투 상태."""
 
-from math import atan2, cos, pi, radians
+from math import atan2, cos, hypot, pi, radians
 
 from beam import Beam
 from combat_data import STAGES, SYSTEMS
@@ -84,6 +84,11 @@ class PlayerCombat:
             return 8 * (elapsed / peak_at) ** .75
         return 8 + 7 * min(1, (elapsed - peak_at) / motion['return_s'])
 
+    def position_lock_remaining(self):
+        if self.state != 'raising':
+            return 0.0
+        return max(0.0, self.settings['parry_move_lock_s'] - (self.time - self.started))
+
     def advance(self, dt):
         self.time += dt
         if self.state == 'raising':
@@ -106,6 +111,18 @@ class PlayerCombat:
         delta = direction - self.aim
         return cos(delta) >= cos(radians(self.settings['guard_angle_deg']) / 2) - 1e-9
 
+    def push_parried_enemies(self):
+        left, bottom, right, top = self.owner.get_bb()
+        reach = self.settings['parry_push_range_m']
+        for enemy in self.owner.targets:
+            if enemy.hp <= 0 or not self.front(enemy):
+                continue
+            x1, y1, x2, y2 = enemy.get_bb()
+            dx = max(0.0, left - x2, x1 - right)
+            dy = max(0.0, bottom - y2, y1 - top)
+            if hypot(dx, dy) <= reach + 1e-9:
+                enemy.start_parry_recoil()
+
     def receive(self, attack_id, source, damage, energy_gain):
         if self.hp <= 0 or attack_id in self.resolved:
             return 'ignored'
@@ -120,12 +137,11 @@ class PlayerCombat:
             if not self.success:
                 self.success_invuln_until = self.time + self.settings['success_invuln_s']
                 self.parry_hit_at = self.time - self.started
+                self.push_parried_enemies()
             self.success = True
             if not self.stunned_one and getattr(source, 'can_be_stunned', True):
                 source.stun(self.settings['stun_s'])
                 self.stunned_one = True
-            if hasattr(source, 'start_parry_recoil'):
-                source.start_parry_recoil()
             self.feedback('parry')
             return 'parry'
         if self.time < self.success_invuln_until - 1e-9:
@@ -146,7 +162,7 @@ class PlayerCombat:
         return 'hit'
 
     def draw(self):
-        if self.state in ('raising', 'guard'):
+        if self.state == 'guard' or self.position_lock_remaining() > 1e-9:
             color = (101, 185, 248) if self.state == 'guard' else (239, 166, 76)
             if self.state == 'raising' and self.time - self.started < self.window:
                 color = (111, 255, 169)

@@ -32,6 +32,8 @@ class RangedEnemy(MeleeEnemy):
         dt = game_framework.frame_time
         self.cooldown = max(0.0, self.cooldown - dt)
         self.cast_age += dt
+        if self.advance_recoil(dt):
+            return
         dx, dy = self.player.x - self.x, self.player.y - self.y
         distance = hypot(dx, dy)
         if distance > 0:
@@ -51,6 +53,8 @@ class RangedEnemy(MeleeEnemy):
             self.cast_age = 0.0
 
     def pose(self):
+        if self.recoil_age is not None:
+            return 'idle', None
         if self.state == 'shoot' and self.cast_age < .5 and self.player.sprites:
             return 'cast', self.cast_age * self.player.sprites.fps
         return ('walk' if self.moving and self.state == 'chase' else 'idle'), None
