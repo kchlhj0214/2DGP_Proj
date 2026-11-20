@@ -11,6 +11,7 @@ class RangedEnemy(MeleeEnemy):
     can_be_stunned = False
     sprite_actor = 'ranged'
     death_action = 'ash'
+    recoil_action = 'stagger'
 
     def __init__(self, identifier, data, x, y, player, add_projectile):
         super().__init__(identifier, data, x, y, player)
@@ -54,7 +55,7 @@ class RangedEnemy(MeleeEnemy):
 
     def pose(self):
         if self.recoil_age is not None:
-            return 'idle', None
+            return super().pose()
         if self.state == 'shoot' and self.cast_age < .5 and self.player.sprites:
             return 'cast', self.cast_age * self.player.sprites.fps
         return ('walk' if self.moving and self.state == 'chase' else 'idle'), None

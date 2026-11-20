@@ -15,6 +15,7 @@ from sprites import clip_duration
 class MeleeEnemy:
     sprite_actor = 'melee'
     death_action = 'collapse'
+    recoil_action = 'deflected'
 
     def __init__(self, identifier, data, x, y, player):
         self.identifier, self.data, self.player = identifier, data, player
@@ -149,7 +150,7 @@ class MeleeEnemy:
 
     def pose(self):
         if self.recoil_age is not None:
-            return 'deflected', self.recoil_age / VISUALS['parry']['push_s'] * 12
+            return self.recoil_action, self.recoil_age / VISUALS['parry']['push_s'] * 12
         if self.state == 'windup':
             return 'chop', 6 * self.age / self.data['windup_s']
         if self.state == 'swing':

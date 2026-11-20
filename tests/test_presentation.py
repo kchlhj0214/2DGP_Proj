@@ -92,14 +92,19 @@ class PresentationTests(TestCase):
         player.combat.right_down()
         self.assertEqual(player.combat.receive('shot', bullet, 10, 10), 'parry')
         self.assertEqual((melee.recoil_age, ranged.recoil_age), (0, 0))
+        self.assertEqual(ranged.pose(), ('stagger', 0))
         self.assertTrue(all(enemy.recoil_age is None for enemy in [*outside, dead]))
         advance(player, [melee, ranged], .12)
         self.assertGreater(hypot(melee.x, melee.y), hypot(3, 3))
         self.assertGreater(hypot(ranged.x, ranged.y), hypot(3, 3))
         self.assertEqual(ranged.shots, 0)
+        self.assertEqual(ranged.pose()[0], 'stagger')
+        self.assertGreater(ranged.pose()[1], 0)
         recoil = (melee.recoil_age, ranged.recoil_age)
         self.assertEqual(player.combat.receive('sword', melee, 10, 10), 'parry')
         self.assertEqual((melee.recoil_age, ranged.recoil_age), recoil)
+        advance(player, [melee, ranged], VISUALS['parry']['push_s'])
+        self.assertNotEqual(ranged.pose()[0], 'stagger')
 
     def test_three_equal_sound_triggers_and_stronger_max_shake(self):
         def fire(energy):
