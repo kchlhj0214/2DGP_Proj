@@ -74,7 +74,7 @@ def validate_presentation(data):
         'sprites': {'atlas', 'asset_dir', 'body_height_px', 'projectile_art'},
         'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'number_s', 'rise_m',
                    'shake_s', 'shake_m', 'max_shake_m'},
-        'parry': {'push_height_ratio', 'push_s', 'raise_s', 'success_lift_s'},
+        'parry': {'push_height_ratio', 'push_s', 'raise_s', 'return_s', 'success_hold_s'},
         'beam': {'taper_width_ratio'},
     }
     paths = {'art', 'water', 'atlas', 'asset_dir', 'sound', 'projectile_art'}

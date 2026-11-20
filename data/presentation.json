@@ -13,7 +13,7 @@
     },
     {"id": "sprites", "atlas": "assets/pixellab-sprites/atlas.json", "asset_dir": "assets/pixellab-sprites", "body_height_px": 158, "projectile_art": "assets/sprites/arcane-orb.png"},
     {"id": "impact", "sound": "assets/audio/beam-pulse.wav", "volume": 60, "hitstop_s": 0.055, "flash_s": 0.115, "number_s": 0.65, "rise_m": 1.15, "shake_s": 0.28, "shake_m": 0.22, "max_shake_m": 0.32},
-    {"id": "parry", "push_height_ratio": 0.34444444444444444, "push_s": 0.75, "raise_s": 0.5, "success_lift_s": 0.13},
+    {"id": "parry", "push_height_ratio": 0.34444444444444444, "push_s": 0.75, "raise_s": 0.11, "return_s": 0.16, "success_hold_s": 0.055},
     {"id": "beam", "taper_width_ratio": 0.38}
   ]
 }

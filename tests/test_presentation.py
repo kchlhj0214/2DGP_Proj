@@ -19,6 +19,22 @@ from wave_data import RANGED
 
 
 class PresentationTests(TestCase):
+    def test_parry_snaps_up_and_recovers_without_changing_input_lock(self):
+        player, enemy = actor()
+        combat = player.combat
+        combat.right_down()
+        self.assertEqual(combat.parry_frame(), 0)
+        combat.advance(.11)
+        self.assertEqual(combat.parry_frame(), 8)
+        combat.advance(.11)
+        self.assertEqual(combat.receive('parry', enemy, 10, 10), 'parry')
+        self.assertEqual(combat.parry_frame(), 8)
+        combat.advance(.24)
+        self.assertEqual(combat.parry_frame(), 15)
+        self.assertEqual(combat.state, 'raising')
+        combat.advance(.54)
+        self.assertEqual(combat.state, 'guard')
+
     def test_defeated_enemies_render_unique_deaths_until_finished(self):
         player, melee = actor()
         ranged = RangedEnemy('ranged', RANGED['ranged'], 4, 0, player, Mock())

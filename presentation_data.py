@@ -87,7 +87,8 @@ VISUALS = {'arena': {'id': 'arena',
  'parry': {'id': 'parry',
            'push_height_ratio': 0.34444444444444444,
            'push_s': 0.75,
-           'raise_s': 0.5,
-           'success_lift_s': 0.13},
+           'raise_s': 0.11,
+           'return_s': 0.16,
+           'success_hold_s': 0.055},
  'beam': {'id': 'beam', 'taper_width_ratio': 0.38}}
 

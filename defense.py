@@ -74,15 +74,15 @@ class PlayerCombat:
 
     def parry_frame(self):
         elapsed = self.time - self.started
-        lock = self.settings['input_lock_s']
-        peak_at = VISUALS['parry']['raise_s']
+        motion = VISUALS['parry']
+        peak_at = motion['raise_s']
         if self.parry_hit_at is not None:
-            peak_at = self.parry_hit_at + VISUALS['parry']['success_lift_s']
+            peak_at = max(peak_at, self.parry_hit_at) + motion['success_hold_s']
             if elapsed <= peak_at:
-                return 5 + 3 * (elapsed - self.parry_hit_at) / (peak_at - self.parry_hit_at)
+                return 8
         elif elapsed <= peak_at:
-            return 8 * elapsed / peak_at
-        return 8 + 7 * min(1, (elapsed - peak_at) / (lock - peak_at))
+            return 8 * (elapsed / peak_at) ** .75
+        return 8 + 7 * min(1, (elapsed - peak_at) / motion['return_s'])
 
     def advance(self, dt):
         self.time += dt
