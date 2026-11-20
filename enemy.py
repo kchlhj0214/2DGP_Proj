@@ -9,10 +9,12 @@ from game_data import CHARACTERS, VIEWPORTS
 from geometry import box_points, draw_sector, intersects, oriented_box
 from enemy_spacing import move_enemy, safe_step
 from presentation_data import VISUALS
+from sprites import clip_duration
 
 
 class MeleeEnemy:
     sprite_actor = 'melee'
+    death_action = 'collapse'
 
     def __init__(self, identifier, data, x, y, player):
         self.identifier, self.data, self.player = identifier, data, player
@@ -32,6 +34,7 @@ class MeleeEnemy:
         self.recoil_angle = 0.0
         self.visual_time = 0.0
         self.moving = False
+        self.death_age = 0.0
 
     def get_bb(self):
         return (self.x - self.width / 2, self.y - self.height / 2,
@@ -64,6 +67,8 @@ class MeleeEnemy:
             self.recoil_age = None
 
     def take_damage(self, amount):
+        if self.hp <= 0:
+            return
         previous = self.hp
         self.hp = max(0, self.hp - amount)
         if self.player.effects:
@@ -91,7 +96,10 @@ class MeleeEnemy:
             self.player.combat.receive(self.attack_id, self, self.data['damage'], self.data['energy_gain'])
 
     def update(self):
-        if self.hp <= 0 or self.player.combat.hp <= 0:
+        if self.hp <= 0:
+            self.death_age += game_framework.frame_time
+            return
+        if self.player.combat.hp <= 0:
             return
         dt = game_framework.frame_time
         self.advance_recoil(dt)
@@ -140,9 +148,14 @@ class MeleeEnemy:
 
     def draw(self):
         flash = self.player.effects and self.player.effects.flashing(self)
-        if (self.hp <= 0 and not flash) or not self.player.sprites:
+        if not self.player.sprites:
             return
         camera = self.player.camera
+        if self.hp <= 0:
+            if self.death_age < clip_duration(self.sprite_actor, self.death_action):
+                self.player.sprites.draw(self.sprite_actor, self.death_action, self, camera,
+                                         self.angle, self.death_age, flash=flash)
+            return
         if self.sprite_actor == 'melee' and self.state == 'windup' and self.recoil_age is None:
             draw_sector(self.x, self.y, self.angle, self.data['sword_length_m'],
                         radians(self.data['sweep_deg']), camera, (216, 138, 70))

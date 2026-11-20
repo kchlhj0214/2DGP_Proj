@@ -10,6 +10,7 @@ from projectile import Projectile
 class RangedEnemy(MeleeEnemy):
     can_be_stunned = False
     sprite_actor = 'ranged'
+    death_action = 'ash'
 
     def __init__(self, identifier, data, x, y, player, add_projectile):
         super().__init__(identifier, data, x, y, player)
@@ -23,7 +24,10 @@ class RangedEnemy(MeleeEnemy):
         pass
 
     def update(self):
-        if self.hp <= 0 or self.player.combat.hp <= 0:
+        if self.hp <= 0:
+            super().update()
+            return
+        if self.player.combat.hp <= 0:
             return
         dt = game_framework.frame_time
         self.cooldown = max(0.0, self.cooldown - dt)

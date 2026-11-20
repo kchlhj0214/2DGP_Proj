@@ -13,9 +13,40 @@ from combat_data import ENEMIES
 from enemy import MeleeEnemy
 from impact_effects import ImpactEffects
 from presentation_data import VISUALS
+from ranged_enemy import RangedEnemy
+from sprites import clip_duration
+from wave_data import RANGED
 
 
 class PresentationTests(TestCase):
+    def test_defeated_enemies_render_unique_deaths_until_finished(self):
+        player, melee = actor()
+        ranged = RangedEnemy('ranged', RANGED['ranged'], 4, 0, player, Mock())
+        player.sprites = Mock()
+        elapsed = game_framework.frame_time
+        try:
+            for enemy, motion in ((melee, 'collapse'), (ranged, 'ash')):
+                with self.subTest(motion=motion):
+                    start = enemy.x, enemy.y
+                    player.sprites.draw.reset_mock()
+                    enemy.take_damage(enemy.hp)
+                    self.assertEqual(enemy.state, 'dead')
+                    enemy.draw()
+                    self.assertEqual(player.sprites.draw.call_args.args[:2],
+                                     (enemy.sprite_actor, motion))
+                    self.assertEqual(player.sprites.draw.call_args.args[-1], 0.0)
+                    duration = clip_duration(enemy.sprite_actor, motion)
+                    game_framework.frame_time = duration / 2
+                    enemy.update()
+                    enemy.draw()
+                    self.assertEqual(player.sprites.draw.call_args.args[-1], duration / 2)
+                    enemy.update()
+                    enemy.draw()
+                    self.assertEqual(player.sprites.draw.call_count, 2)
+                    self.assertEqual((enemy.x, enemy.y), start)
+        finally:
+            game_framework.frame_time = elapsed
+
     def test_parry_moves_collision_box_but_does_not_push_through_enemy(self):
         for blocked in (False, True):
             player, enemy = actor()
