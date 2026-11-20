@@ -1,5 +1,6 @@
 """Prepare the sprite flash masks and independent 2D water layer for pico2d."""
 
+import argparse
 import json
 import math
 import random
@@ -16,9 +17,10 @@ SETTINGS = {row['id']: row for row in json.loads(
 
 
 def sprites():
-    settings = SETTINGS['sprites']
-    atlas = ROOT/settings['atlas']
-    directory = ROOT/settings['asset_dir']
+    # This builder regenerates the original review set. The 256 px assets use
+    # build_pixellab_motion.py and their own rig data.
+    atlas = ROOT/'art/sprite-review/atlas.json'
+    directory = ROOT/'assets/combat-sprites'
     directory.mkdir(parents=True,exist_ok=True)
     for clip in json.loads(atlas.read_text(encoding='utf-8'))['clips']:
         action, actor = clip['action'], clip['actor']
@@ -142,7 +144,7 @@ def water():
                 round(cy+reflect_r*math.sin(reflect_at))]
             strength = .30*math.exp(-stone_dist/(9 + 8*max(0,-dy/r)))
             shade = 1 - .42*math.exp(-stone_dist/4.5) - .21*math.exp(-(depth-wall)/4)
-            wet = (46,65,65)
+            wet = (35,66,69)
             speckle = ripple*1.6 + grain*.34
             color = tuple(round((base*(1-strength) + reflected[i]*strength)*shade+speckle)
                           for i,base in enumerate(wet))
@@ -198,5 +200,9 @@ def water():
 
 
 if __name__ == '__main__':
-    sprites()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--arena-only', action='store_true')
+    args = parser.parse_args()
+    if not args.arena_only:
+        sprites()
     water()

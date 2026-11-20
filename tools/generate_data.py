@@ -97,8 +97,8 @@ def validate_presentation(data):
     assets = next(row for row in rows if row['id'] == 'sprites')
     atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))
     expected = {'hero': {'idle','guard_walk','guard','run','parry'},
-                'melee': {'idle','walk','chop','deflected'},
-                'ranged': {'idle','walk','cast'}}
+                'melee': {'idle','walk','chop','deflected','collapse'},
+                'ranged': {'idle','walk','cast','ash'}}
     if atlas['directions'] != ['S','SE','E','NE','N','NW','W','SW'] or atlas['fps'] <= 0:
         raise ValueError('스프라이트 방향 또는 속도 오류')
     for clip in atlas['clips']:
@@ -113,11 +113,7 @@ def validate_presentation(data):
                                                   for axis in point)
                            for row in anchors for point in row)):
                 raise ValueError(f'방패 발사점 누락: {action}')
-        source = ROOT / assets['atlas']
-        if action == 'deflected':
-            source = ROOT / assets['asset_dir'] / f'{actor}-{action}.png'
-        else:
-            source = source.parent / clip['file']
+        source = (ROOT / assets['atlas']).parent / clip['file']
         if not source.is_file() or not (ROOT / assets['asset_dir'] / f'{actor}-{action}-flash.png').is_file():
             raise ValueError(f'스프라이트 파일 누락: {actor}/{action}')
     if any(expected.values()):

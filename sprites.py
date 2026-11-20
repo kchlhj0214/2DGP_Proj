@@ -25,6 +25,10 @@ def frame_index(clip, elapsed, frame=None):
     return index % count if clip['loop'] else min(count - 1, max(0, index))
 
 
+def clip_duration(actor, action):
+    return CLIPS[actor, action]['frames'] / ATLAS['fps']
+
+
 def shield_emitter(owner, action, angle, elapsed):
     clip = CLIPS['hero', action]
     sx, sy = clip['shield_px'][direction(angle)][frame_index(clip, elapsed)]
@@ -43,7 +47,7 @@ class SpriteLibrary:
         for clip in ATLAS['clips']:
             actor, action = clip['actor'], clip['action']
             directory = ROOT / SETTINGS['asset_dir']
-            source = (directory if action == 'deflected' else ATLAS_PATH.parent) / clip['file']
+            source = ATLAS_PATH.parent / clip['file']
             white = directory / f'{actor}-{action}-flash.png'
             images = (pico2d.load_image(str(source)), pico2d.load_image(str(white)))
             if any((image.w, image.h) != (self.cell * clip['frames'], self.cell * 8)

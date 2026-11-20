@@ -1,7 +1,6 @@
 """Build the Patch Windows archive from an existing embedded Python with pico2d."""
 
 import argparse
-import json
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -42,14 +41,6 @@ def build(runtime, output):
         for path in sorted((ROOT / 'data').glob('*.json')):
             archive.write(path, path.relative_to(ROOT).as_posix())
         write_tree(archive, ROOT / 'assets', Path('assets'))
-        atlas = ROOT / 'art/sprite-review/atlas.json'
-        archive.write(atlas, atlas.relative_to(ROOT).as_posix())
-        for clip in json.loads(atlas.read_text(encoding='utf-8'))['clips']:
-            if clip['action'] != 'deflected':
-                image = atlas.parent / clip['file']
-                archive.write(image, image.relative_to(ROOT).as_posix())
-        archive.write(ROOT / 'art/background-review-v1/colosseum.png',
-                      'art/background-review-v1/colosseum.png')
         archive.write(ROOT / 'assets/audio/CREDITS.md', 'CREDITS.md')
 
 
