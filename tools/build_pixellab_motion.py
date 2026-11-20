@@ -118,19 +118,36 @@ class Rig:
                 joints[name] -= motion * 1j
         if gait:
             _, lift, _, _ = gait[index % len(gait)]
-            torso = self.forward * row["lean"] * 0.72 - lift * 0.22j
+            running = action == "run"
+            if running:
+                opposite_lift = gait[(index + len(gait) // 2) % len(gait)][1]
+                torso = self.forward * row["lean"] * 0.42 - min(lift, opposite_lift) * 0.62j
+                tilt = self.forward * row["lean"] * 0.68
+            else:
+                torso = self.forward * row["lean"] * 0.72 - lift * 0.22j
+                tilt = 0
             for name in joints:
-                if not name.endswith(("foot", "knee")):
-                    joints[name] += torso
+                if name.endswith(("foot", "knee")):
+                    continue
+                joints[name] += torso
+                if name != "waist" and not name.endswith("hip"):
+                    joints[name] += tilt
+            joints["head"] += tilt * 0.29
+            stride_scale = {"run": 2.45, "guard_walk": 2.8}.get(action, 2.2)
             for side, phase in zip(SIDES, (0, len(gait) // 2)):
                 stride, lift, _, swing = gait[(index + phase) % len(gait)]
-                travel = self.forward * stride * (2.8 if action == "run" else 2.2)
+                travel = self.forward * stride * stride_scale
                 joints[f"{side}_foot"] += travel - lift * 1.65j
-                joints[f"{side}_knee"] += travel * 0.52 - lift * 0.54j
-                if action != "guard_walk":
-                    weight = 0.55 if side == self.gear_side else 1.5
+                joints[f"{side}_knee"] += travel * 0.52 - lift * (0.75 if running else 0.54) * 1j
+                if action != "guard_walk" or side != self.gear_side:
+                    weight = 1.5
+                    if side == self.gear_side:
+                        weight = 0.36 if running else 0.55
                     joints[f"{side}_elbow"] += self.forward * swing * weight * 0.54
                     joints[f"{side}_hand"] += self.forward * swing * weight - abs(swing) * 0.18j
+                    if running and side != self.gear_side:
+                        joints[f"{side}_elbow"] -= max(0, swing) * 0.21j
+                        joints[f"{side}_hand"] -= max(0, swing) * 0.63j
         hand = joints[self.grip]
         if action in {"guard", "guard_walk", "parry"}:
             guard = self.forward * (row["shield_forward"] - 5) * 1.35
