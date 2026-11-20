@@ -78,6 +78,28 @@ def reassign_fragments(owners, opacity, forearms):
     return result
 
 
+def recover_left_arm(image, marks, donor):
+    # The front plate has a complete left arm in the same palette and costume.
+    # Fit its shoulder and wrist to the new angle, then layer the existing armor on top.
+    source, source_marks, outline = donor
+    joints = RIGS["joint_columns"]
+    shoulder, wrist = joints.index("left_shoulder"), joints.index("left_hand")
+    pivot = complex(*source_marks["joints"][shoulder])
+    target = complex(*marks["joints"][shoulder])
+    original = complex(*source_marks["joints"][wrist]) - pivot
+    posed = complex(*marks["joints"][wrist]) - target
+    inverse = original / posed
+    offset = pivot - inverse * target
+    mask = Image.new("1", source.size)
+    ImageDraw.Draw(mask).polygon([tuple(point) for point in outline], fill=1)
+    arm = rgba_layer(np.asarray(source), np.asarray(mask), overlap=0)
+    under = arm.transform(image.size, Image.Transform.AFFINE,
+                          (inverse.real, -inverse.imag, offset.real,
+                           inverse.imag, inverse.real, offset.imag),
+                          resample=Image.Resampling.NEAREST)
+    return Image.alpha_composite(under, image)
+
+
 def close_joint_seam(frame, center, radius, gap):
     """Join close edges at a known joint, retaining the nearest source color."""
     cx, cy = round(center.real), round(center.imag)
@@ -100,6 +122,46 @@ def close_joint_seam(frame, center, radius, gap):
         sy, sx = solid[((solid[:, 0] - py) ** 2 + (solid[:, 1] - px) ** 2).argmin()]
         stitched[py, px] = original[sy, sx]
     frame.paste(Image.fromarray(stitched), (left, top))
+
+
+def clean_pixel_art(frame, keep_magic):
+    pixels = np.array(frame)
+    rgb = pixels[:, :, :3]
+    visible = pixels[:, :, 3] > 0
+    for region in pixel_regions(visible):
+        if len(region) > 18:
+            continue
+        y, x = zip(*region)
+        colors = rgb[y, x].astype(int)
+        if keep_magic and np.any((colors[:, 2] > colors[:, 0] + 12)
+                                 & (colors[:, 2] > colors[:, 1] + 22)):
+            continue
+        pixels[y, x] = 0
+        visible[y, x] = False
+
+    # A one-pixel transparent hole shows as a white dot on light backgrounds.
+    above = visible[:-2, 1:-1]
+    below = visible[2:, 1:-1]
+    left = visible[1:-1, :-2]
+    right = visible[1:-1, 2:]
+    holes = ~visible[1:-1, 1:-1] & above & below & left & right
+    for y, x in np.argwhere(holes) + 1:
+        neighbors = pixels[[y - 1, y + 1, y, y], [x, x, x - 1, x + 1]]
+        pixels[y, x] = neighbors[np.argsort(neighbors[:, :3].sum(axis=1))[1]]
+    visible = pixels[:, :, 3] > 0
+
+    # Blend only tiny near-white pinpricks. Broader steel glints stay crisp.
+    white = (rgb.min(axis=2) >= 224) & visible
+    for region in pixel_regions(white):
+        if len(region) > 5:
+            continue
+        for y, x in region:
+            yy, xx = slice(y - 1, y + 2), slice(x - 1, x + 2)
+            nearby = rgb[yy, xx][visible[yy, xx] & ~white[yy, xx]]
+            if len(nearby) >= 3:
+                color = np.median(nearby, axis=0)
+                rgb[y, x] = np.rint(rgb[y, x] * .35 + color * .65)
+    return Image.fromarray(pixels)
 
 
 @dataclass
@@ -504,6 +566,17 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
                     or any(name not in RIGS["joint_columns"] for name in marks.get("fringe_joints", ()))
                     or marks["gear"]["kind"] not in {"ellipse", "polygon", "segment"}):
                 raise ValueError(f"Incomplete rig for {actor} {direction}")
+    donor_spec = RIGS["left_arm_patch"]
+    donor_actor, donor_direction = donor_spec["actor"], donor_spec["direction"]
+    donor = None
+    if donor_actor in actors:
+        image = Image.open(source / donor_actor / f"{donor_direction}.png").convert("RGBA")
+        outline = donor_spec["outline"]
+        if image.size != (CELL, CELL) or len(outline) < 3 or any(
+            len(p) != 2 or any(type(v) is not int or not 0 <= v < CELL for v in p) for p in outline
+        ):
+            raise ValueError("Invalid left arm plate")
+        donor = image, RIGS["rigs"][donor_actor][donor_direction], outline
     destination.mkdir(parents=True, exist_ok=True)
     atlas = {"cell_px": CELL, "fps": MOTION["fps"], "origin_px": RIGS["origin_px"],
              "body_height_px": RIGS["body_height_px"], "directions": directions, "clips": []}
@@ -514,6 +587,11 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
             image = Image.open(source / actor / f"{direction}.png").convert("RGBA")
             if image.size != (CELL, CELL) or not image.getbbox():
                 raise ValueError(f"Invalid {actor} {direction} rotation")
+            if marks.get("restore_left_arm"):
+                if actor != donor_actor or donor is None:
+                    raise ValueError(f"No matching left arm plate for {actor} {direction}")
+                image = recover_left_arm(image, marks, donor)
+            image = clean_pixel_art(image, keep_magic=actor == "ranged")
             rigs.append(Rig(actor, direction, image, marks, load_underpaint(actor, direction, source)))
         for action, definition in (MOTION["clips"] | RIGS["extra_clips"]).items():
             if actor not in definition["actors"]:
@@ -526,6 +604,8 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
                 centers = []
                 for x, row in enumerate(motion):
                     frame, emitter = rig.draw(action, x, row)
+                    if action not in RIGS["extra_clips"]:
+                        frame = clean_pixel_art(frame, keep_magic=actor == "ranged")
                     bbox = frame.getchannel("A").getbbox()
                     if bbox is None and (action not in RIGS["extra_clips"] or x != len(motion) - 1):
                         raise ValueError(f"Empty {name} {directions[y]} frame {x}")
