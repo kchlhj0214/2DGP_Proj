@@ -191,7 +191,7 @@ def validate_waves(data, scale, combat):
     for row in data['ranged']:
         if row['character_id'] not in characters:
             raise ValueError('존재하지 않는 원거리 캐릭터 참조')
-        if not combat['systems'][0]['guard_kmph'] < row['speed_kmph'] < characters[row['character_id']]['speed_kmph']:
+        if row['speed_kmph'] >= characters[row['character_id']]['speed_kmph']:
             raise ValueError('원거리 적 이동 속도 관계가 잘못되었습니다.')
     return data
 
@@ -244,12 +244,14 @@ def validate_combat(data, scale):
     if system['beam_duration_s'] <= system['beam_tick_s'] * 2:
         raise ValueError('광선 지속 시간이 세 번째 타격 전에 끝납니다.')
     characters = {r['id']: r for r in scale['characters']}
+    if system['guard_kmph'] >= characters['player']['speed_kmph']:
+        raise ValueError('기본 방어 이동 속도는 달리기보다 느려야 합니다.')
     enemies = {r['id']: r for r in data['enemies']}
     for enemy in enemies.values():
         if enemy['character_id'] not in characters:
             raise ValueError('존재하지 않는 캐릭터 참조')
-        if not system['guard_kmph'] < enemy['speed_kmph'] < characters[enemy['character_id']]['speed_kmph']:
-            raise ValueError('기본 방어 < 적 < 일반 이동 속도 관계가 잘못되었습니다.')
+        if enemy['speed_kmph'] >= characters[enemy['character_id']]['speed_kmph']:
+            raise ValueError('근접 적 이동 속도는 달리기보다 느려야 합니다.')
     return data
 
 

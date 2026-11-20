@@ -107,7 +107,7 @@ class ScaleTests(unittest.TestCase):
         for width, height in ((1280, 720), (1920, 1080), (2560, 1440), (1280, 1024)):
             arena, player, camera = scene(width, height)
             ppm = camera.pixels_per_meter
-            self.assertAlmostEqual(arena.radius * 2 * ppm, height * 1.75)
+            self.assertAlmostEqual(arena.radius * 2 * ppm, height * 1.9)
             melee = MeleeEnemy('melee', ENEMIES['melee'], 0, 0, player)
             ranged = RangedEnemy('ranged', RANGED['ranged'], 0, 0, player, None)
             for actor in (player, melee, ranged):
@@ -127,7 +127,7 @@ class ScaleTests(unittest.TestCase):
                 game_framework.frame_time = 1 / fps
                 for _ in range(fps * 3):
                     player.update()
-                self.assertAlmostEqual(hypot(player.x, player.y), 14 / 3.6 * 3)
+                self.assertAlmostEqual(hypot(player.x, player.y), 22 / 3.6 * 3)
 
     def test_irregular_frames_and_key_release(self):
         _, player, _ = scene()
@@ -255,7 +255,7 @@ class RenderTests(unittest.TestCase):
             game_framework.frame_time = 1 / 60
             for _ in range(60):
                 play_mode.update()
-            self.assertAlmostEqual(play_mode.player.y, 14 / 3.6)
+            self.assertAlmostEqual(play_mode.player.y, 22 / 3.6)
             self.assertEqual(play_mode.camera.to_screen(play_mode.player.x, play_mode.player.y),
                              (640, 360))
             with patch.object(pico2d, 'get_events', return_value=[]), \

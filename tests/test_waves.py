@@ -50,22 +50,24 @@ class WaveTests(unittest.TestCase):
     def test_four_simultaneous_gates_every_point_three_seconds(self):
         player, waves = controller()
         waves.load()
-        self.assertEqual((len(waves.enemies), waves.pending), (4, 8))
+        self.assertEqual((len(waves.enemies), waves.pending), (4, 4))
         self.assertEqual({gate for _, gate, _ in waves.spawn_log}, {'north', 'south', 'west', 'east'})
         for enemy in waves.enemies:
-            self.assertTrue(player.arena.contains_box(enemy.x, enemy.y - .45, .9, .9))
+            foot_height = player.boundary_height
+            foot_y = enemy.y - (enemy.height - foot_height) / 2
+            self.assertTrue(player.arena.contains_box(enemy.x, foot_y, enemy.width, foot_height))
         elapse(waves, .299)
         self.assertEqual(len(waves.enemies), 4)
         elapse(waves, .001)
-        self.assertEqual((len(waves.enemies), waves.pending), (8, 4))
+        self.assertEqual((len(waves.enemies), waves.pending), (8, 0))
         elapse(waves, .3)
-        self.assertEqual((len(waves.enemies), waves.pending), (12, 0))
+        self.assertEqual((len(waves.enemies), waves.pending), (8, 0))
         self.assertEqual(sum(isinstance(e, RangedEnemy) for e in waves.enemies), 4)
         for gate in ('north', 'south', 'west', 'east'):
-            self.assertEqual([t for t, g, _ in waves.spawn_log if g == gate], [0, .3, .6])
+            self.assertEqual([t for t, g, _ in waves.spawn_log if g == gate], [0, .3])
 
     def test_count_and_kinds_for_every_wave_and_mode(self):
-        for number, count in ((1, 12), (2, 12), (3, 16), (4, 0)):
+        for number, count in ((1, 8), (2, 12), (3, 16), (4, 0)):
             for selection in ('all', 'melee', 'ranged'):
                 player, waves = controller()
                 waves.load(number, selection)
@@ -74,6 +76,10 @@ class WaveTests(unittest.TestCase):
                 self.assertEqual(waves.pending, 0)
                 ranged = sum(isinstance(e, RangedEnemy) for e in waves.enemies)
                 self.assertEqual(ranged, 0 if selection == 'melee' else count if selection == 'ranged' else min(count, 4))
+                if number == 1 and selection == 'all':
+                    for gate in ('north', 'south', 'east', 'west'):
+                        self.assertEqual([(time, kind) for time, entry, kind in waves.spawn_log
+                                          if entry == gate], [(0, 'melee'), (.3, 'ranged')])
 
     def test_q_cycles_zero_one_melee_one_ranged_and_clears_old_wave(self):
         player, waves = controller()
@@ -105,7 +111,7 @@ class WaveTests(unittest.TestCase):
             waves.handle_key(code)
             self.assertIsNone(waves.single_mode)
             elapse(waves, 1)
-            expected = 0 if waves.number == 4 else 16 if waves.number == 3 else 12
+            expected = {1: 8, 2: 12, 3: 16, 4: 0}[waves.number]
             self.assertEqual(len(waves.enemies), expected)
 
     def test_jump_and_filter_remove_old_objects_and_queue_keep_player(self):

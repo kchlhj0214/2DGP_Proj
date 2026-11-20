@@ -7,7 +7,7 @@ VIEWPORTS = {'main': {'id': 'main',
 
 ARENAS = {'arena': {'id': 'arena',
            'viewport_id': 'main',
-           'diameter_height_ratio': 1.75,
+           'diameter_height_ratio': 1.9,
            'grid_m': 1.0}}
 
 CHARACTERS = {'player': {'id': 'player',
@@ -15,5 +15,5 @@ CHARACTERS = {'player': {'id': 'player',
             'height_ratio': 0.13333333333333333,
             'width_height_ratio': 0.5,
             'boundary_height_ratio': 0.5,
-            'speed_kmph': 14.0}}
+            'speed_kmph': 22.0}}
 

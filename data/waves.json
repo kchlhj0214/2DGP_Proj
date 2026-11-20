@@ -3,7 +3,7 @@
     {"id": "main", "spawn_interval_s": 0.3}
   ],
   "waves": [
-    {"id": "wave1", "number": 1, "melee_id": "melee", "ranged_id": "ranged", "melee_per_gate": 2, "ranged_per_gate": 1},
+    {"id": "wave1", "number": 1, "melee_id": "melee", "ranged_id": "ranged", "melee_per_gate": 1, "ranged_per_gate": 1},
     {"id": "wave2", "number": 2, "melee_id": "melee", "ranged_id": "ranged", "melee_per_gate": 2, "ranged_per_gate": 1},
     {"id": "wave3", "number": 3, "melee_id": "melee", "ranged_id": "ranged", "melee_per_gate": 3, "ranged_per_gate": 1},
     {"id": "wave4", "number": 4, "melee_id": "melee", "ranged_id": "ranged", "melee_per_gate": 0, "ranged_per_gate": 0}

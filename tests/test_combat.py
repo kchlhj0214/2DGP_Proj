@@ -86,7 +86,7 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(combat.state, 'guard')
         x = player.x
         advance(player, [], 1)
-        self.assertAlmostEqual(player.x - x, 7 / 3.6)
+        self.assertAlmostEqual(player.x - x, 14 / 3.6)
         combat.right_up()
         self.assertEqual(combat.state, 'free')
         combat.right_down()
@@ -235,7 +235,7 @@ class CombatTests(unittest.TestCase):
         self.assertFalse(player.combat.fire())
         advance(player, [], .5)
         self.assertEqual(beam.angle, 0)
-        self.assertAlmostEqual(player.y, 14 / 3.6 * .5)
+        self.assertAlmostEqual(player.y, 22 / 3.6 * .5)
         self.assertEqual((enemy.hp, other.hp), (55, 55))
         advance(player, [], 1)
         self.assertEqual(player.combat.state, 'free')
@@ -269,7 +269,8 @@ class CombatTests(unittest.TestCase):
         scale = json.loads((ROOT / 'data/scale.json').read_text(encoding='utf-8'))
         for sheet, field, value in (('enemies', 'character_id', 'missing'),
                                     ('systems', 'energy_max', None),
-                                    ('enemies', 'speed_kmph', 20),
+                                    ('enemies', 'speed_kmph', 22),
+                                    ('systems', 'guard_kmph', 22),
                                     ('stages', 'parry_window_s', 2)):
             data = copy.deepcopy(source)
             data[sheet][0][field] = value
