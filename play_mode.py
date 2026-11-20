@@ -110,10 +110,17 @@ def render():
     pico2d.clear_canvas()
     pico2d.draw_rectangle(0, 0, camera.width_px, camera.height_px,
                           57, 43, 35, filled=True)
-    beam = player.combat.beam
-    game_world.render(beam.draw if beam else None)
+    game_world.render(draw_ground_effects)
     player.effects.draw()
     pico2d.update_canvas()
+
+
+def draw_ground_effects():
+    for enemy in enemies:
+        enemy.draw_warning()
+    beam = player.combat.beam
+    if beam:
+        beam.draw()
 
 
 def pause():

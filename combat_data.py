@@ -36,11 +36,11 @@ ENEMIES = {'melee': {'id': 'melee',
            'speed_kmph': 10,
            'damage': 10,
            'energy_gain': 10,
-           'stop_m': 8.2,
+           'attack_gap_m': 0.45,
            'windup_s': 0.6,
            'swing_s': 0.25,
            'recovery_s': 0.8,
-           'sword_length_m': 8,
+           'sword_length_m': 3.4,
            'sword_width_m': 1,
            'sweep_deg': 90}}
 

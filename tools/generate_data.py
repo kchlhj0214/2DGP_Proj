@@ -204,7 +204,7 @@ def validate_combat(data, scale):
                     'damage_multiplier', 'beam_duration_s', 'beam_tick_s', 'step_s'},
         'stages': {'id', 'energy_min', 'parry_window_s', 'beam_width_m'},
         'enemies': {'id', 'character_id', 'hp', 'speed_kmph', 'damage', 'energy_gain',
-                    'stop_m', 'windup_s', 'swing_s', 'recovery_s', 'sword_length_m',
+                    'attack_gap_m', 'windup_s', 'swing_s', 'recovery_s', 'sword_length_m',
                     'sword_width_m', 'sweep_deg'},
     }
     if set(data) != set(schemas):

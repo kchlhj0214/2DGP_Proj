@@ -13,13 +13,15 @@ import game_framework
 import play_mode
 from combat_data import ENEMIES, SYSTEMS
 from enemy import MeleeEnemy
-from geometry import box_points, intersects, oriented_box
+from geometry import box_points, intersects, oriented_box, warning_strength
 
 
 def actor(x=None, y=0, identifier='one'):
     arena, player, camera = scene()
     spec = ENEMIES['melee']
-    enemy = MeleeEnemy(identifier, spec, spec['stop_m'] if x is None else x, y, player)
+    enemy = MeleeEnemy(identifier, spec, 0 if x is None else x, y, player)
+    if x is None:
+        enemy.x = enemy.attack_distance(0)
     player.targets = [enemy]
     return player, enemy
 
@@ -177,11 +179,27 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(player.combat.hp, 90)
         player, enemy = actor()
         advance(player, [enemy], .1)
-        angle = enemy.angle
+        attack_pose = enemy.x, enemy.y, enemy.angle
         player.y = 10
         advance(player, [enemy], .7)
-        self.assertEqual(enemy.angle, angle)
+        self.assertEqual((enemy.x, enemy.y, enemy.angle), attack_pose)
+        self.assertIn(enemy.state, ('swing', 'recovery'))
         self.assertEqual(player.combat.hp, 100)
+
+    def test_close_attack_distance_and_two_warning_flashes(self):
+        for angle in (0, pi / 4, pi / 2, 3 * pi / 4, pi):
+            player, enemy = actor(0)
+            distance = enemy.attack_distance(angle)
+            enemy.x, enemy.y = cos(angle) * (distance + 2), sin(angle) * (distance + 2)
+            advance(player, [enemy], .35)
+            self.assertEqual(enemy.state, 'chase')
+            advance(player, [enemy], .45)
+            self.assertEqual(enemy.state, 'windup')
+            self.assertAlmostEqual((enemy.x**2 + enemy.y**2)**.5, distance)
+            advance(player, [enemy], .65)
+            self.assertEqual(player.combat.hp, 90)
+        self.assertEqual([warning_strength(age, .6) for age in (.1, .26, .4, .56, .6)],
+                         [1, 0, 1, 0, 0])
 
     def test_beam_zero_energy_and_timing_width_damage(self):
         player, enemy = actor(5, 0)
@@ -266,7 +284,7 @@ class CombatRenderTests(unittest.TestCase):
             play_mode.init()
             player = play_mode.player
             enemy = play_mode.enemies[0]
-            enemy.x, enemy.y = enemy.data['stop_m'], 0
+            enemy.x, enemy.y = enemy.attack_distance(0), 0
             for other in play_mode.enemies[1:]:
                 other.take_damage(60)
             advance(player, [enemy], .55)
@@ -321,7 +339,7 @@ class CombatRenderTests(unittest.TestCase):
             self.assertTrue(all(e.hp == 60 for e in play_mode.enemies))
             # 실제로 회전하는 칼의 판정을 그린다.
             enemy = play_mode.enemies[0]
-            enemy.x, enemy.y = enemy.data['stop_m'], 0
+            enemy.x, enemy.y = enemy.attack_distance(0), 0
             advance(play_mode.player, [enemy], .68)
             self.assertEqual(enemy.state, 'swing')
             play_mode.render()

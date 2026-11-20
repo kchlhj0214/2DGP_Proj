@@ -6,7 +6,7 @@ import pico2d
 
 import game_framework
 from game_data import CHARACTERS, VIEWPORTS
-from geometry import box_points, draw_sector, intersects, oriented_box
+from geometry import box_points, intersects, oriented_box, draw_sweep_warning, warning_strength
 from enemy_spacing import move_enemy, safe_step
 from presentation_data import VISUALS
 from sprites import clip_duration
@@ -90,6 +90,14 @@ class MeleeEnemy:
         return oriented_box(self.x, self.y, angle,
                             self.data['sword_length_m'], self.data['sword_width_m'])
 
+    def attack_distance(self, angle):
+        # Distance between centers once the body boxes almost touch along the approach.
+        across = (self.width + self.player.width) / 2
+        along = (self.height + self.player.height) / 2
+        contact = min(across / max(abs(cos(angle)), 1e-9),
+                      along / max(abs(sin(angle)), 1e-9))
+        return contact + self.data['attack_gap_m']
+
     def resolve_sword(self):
         if not self.hit and intersects(self.sword_polygon(), box_points(self.player.get_bb())):
             self.hit = True
@@ -108,8 +116,9 @@ class MeleeEnemy:
             distance = hypot(dx, dy)
             if distance > 0:
                 self.angle = atan2(dy, dx)
-            if distance > self.data['stop_m'] + 1e-9:
-                step = min(distance - self.data['stop_m'], self.data['speed_kmph'] / 3.6 * dt)
+            attack_distance = self.attack_distance(self.angle)
+            if distance > attack_distance + 1e-9:
+                step = min(distance - attack_distance, self.data['speed_kmph'] / 3.6 * dt)
                 # 적의 발밑도 플레이어와 같은 원 경계를 사용한다.
                 self.walk_toward(dx / distance * step, dy / distance * step, dt)
             else:
@@ -146,6 +155,14 @@ class MeleeEnemy:
             return 'chop', 9 + 6 * self.age / self.data['recovery_s']
         return ('walk' if self.moving and self.state == 'chase' else 'idle'), None
 
+    def draw_warning(self):
+        if self.state == 'windup':
+            opacity = warning_strength(self.age, self.data['windup_s'])
+            if opacity > 0:
+                draw_sweep_warning(self.x, self.y, self.angle,
+                                   self.data['sword_length_m'], self.data['sword_width_m'],
+                                   radians(self.data['sweep_deg']), self.player.camera, opacity)
+
     def draw(self):
         flash = self.player.effects and self.player.effects.flashing(self)
         if not self.player.sprites:
@@ -156,9 +173,6 @@ class MeleeEnemy:
                 self.player.sprites.draw(self.sprite_actor, self.death_action, self, camera,
                                          self.angle, self.death_age, flash=flash)
             return
-        if self.sprite_actor == 'melee' and self.state == 'windup' and self.recoil_age is None:
-            draw_sector(self.x, self.y, self.angle, self.data['sword_length_m'],
-                        radians(self.data['sweep_deg']), camera, (216, 138, 70))
         motion, frame = self.pose()
         self.player.sprites.draw(self.sprite_actor, motion, self, camera, self.angle,
                                  self.visual_time, frame, flash)
