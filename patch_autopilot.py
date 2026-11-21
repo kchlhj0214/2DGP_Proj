@@ -2,9 +2,12 @@
 
 import pico2d
 
+from enemy_spacing import is_free
+
 
 class PatchRound:
-    checks = ('arena-loads', 'parry-moves-enemy', 'beam-three-pulses', 'ranged-fires')
+    checks = ('arena-loads', 'parry-moves-enemy', 'beam-three-pulses', 'ranged-fires',
+              'player-hit-flashes', 'enemies-stay-apart')
 
     def __init__(self, mode, report):
         self.mode = mode
@@ -15,6 +18,7 @@ class PatchRound:
         self.target_x = 0.0
         self.triggered = False
         self.beam = None
+        self.hit_colors = []
         self.mode.waves.load(4)
         self.mode.player.y = 23.0
         self.mode.player.pressed_keys.add(pico2d.SDLK_w)
@@ -63,8 +67,22 @@ class PatchRound:
                 self.beam = combat.beam
             if self.beam and not self.beam.active and self.beam.ticks == 3:
                 if all(self.enemy.identifier in ids for ids in self.beam.hit_ids) and player.effects.sound:
-                    self.spawn('ranged', 5)
+                    self.spawn('ranged', 14)
                     self.write('pass')
         elif self.index == 3:
-            if self.enemy.shots > 0 and combat.hp < combat.settings['player_hp'] and self.age >= 1.5:
+            if self.enemy.shots > 0 and self.enemy.x - player.x >= 13.9:
+                self.write('pass')
+        elif self.index == 4:
+            color = player.effects.player_flash_color()
+            if color is not None and (not self.hit_colors or color != self.hit_colors[-1]):
+                self.hit_colors.append(color)
+            if (combat.hp < combat.settings['player_hp'] and color is None
+                    and self.hit_colors == ['red', 'white', 'red']):
+                self.mode.waves.load(3, 'all')
+                self.write('pass')
+        elif self.index == 5:
+            enemies = self.mode.enemies
+            if any(not is_free(enemy, enemy.x, enemy.y) for enemy in enemies):
+                self.write('fail', ': enemies moved inside the spacing gap')
+            elif self.age >= 2 and len(enemies) == 16:
                 self.write('pass')
