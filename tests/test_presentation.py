@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 from test_combat import actor, advance
-from test_scale import pico2d
+from test_scale import pico2d, read_canvas
 
 import game_framework
 import play_mode
@@ -16,7 +16,7 @@ from presentation_data import VISUALS
 from projectile import Projectile
 from ranged_enemy import RangedEnemy
 from sprites import clip_duration
-from wave_data import RANGED
+from wave_data import RANGED, SETTINGS
 
 
 class PresentationTests(TestCase):
@@ -68,7 +68,8 @@ class PresentationTests(TestCase):
         for blocked in (False, True):
             player, enemy = actor()
             if blocked:
-                blocker = MeleeEnemy('wall', ENEMIES['melee'], enemy.x + enemy.width + .2, 0, player)
+                gap = SETTINGS['main']['enemy_gap_m']
+                blocker = MeleeEnemy('wall', ENEMIES['melee'], enemy.x + enemy.width + gap + .2, 0, player)
                 player.targets.append(blocker)
             before = enemy.get_bb()
             advance(player, [enemy], .55)
@@ -84,7 +85,7 @@ class PresentationTests(TestCase):
         player, melee = actor(3, 3)
         ranged = RangedEnemy('ranged', RANGED['ranged'], 3, -3, player, Mock())
         outside = [MeleeEnemy(name, ENEMIES['melee'], x, y, player)
-                   for name, x, y in (('rear', -3, 0), ('flank', 0, 5), ('distant', 7, 0))]
+                   for name, x, y in (('rear', -3, 0), ('flank', -.5, 5), ('distant', 7, 0))]
         dead = MeleeEnemy('dead', ENEMIES['melee'], 3, 0, player)
         dead.take_damage(dead.hp)
         player.targets.extend([ranged, *outside, dead])
@@ -152,25 +153,49 @@ class PresentationTests(TestCase):
             play_mode.init()
             player, enemy = play_mode.player, play_mode.enemies[0]
             effects = player.effects
+
+            def flash_pixels(color):
+                pico2d.clear_canvas()
+                player.draw()
+                pixels = read_canvas(1280, 720)
+                return sum(pixels[i:i + 4] == color
+                           for i in range(0, len(pixels), 4))
+
+            red, white = b'\xfa\x37\x34\xff', b'\xff\xff\xff\xff'
             self.assertIsNotNone(effects.sound)
             player.combat.state = 'guard'
             player.combat.aim = 0
             enemy.x, enemy.y = 2, 0
             self.assertEqual(player.combat.receive('blocked', enemy, 10, 10), 'block')
             self.assertFalse(effects.numbers)
+            self.assertIsNone(effects.player_flash_color())
             enemy.x = -2
             self.assertEqual(player.combat.receive('actual', enemy, 10, 10), 'hit')
             self.assertEqual(effects.numbers[0].amount, 10)
-            self.assertTrue(effects.flashing(player))
+            self.assertEqual(effects.player_flash_color(), 'red')
+            self.assertGreater(flash_pixels(red), 100)
             previous = player.combat.time
             game_framework.frame_time = effects.config['hitstop_s'] / 2
             play_mode.update()
             self.assertEqual(player.combat.time, previous)
             self.assertGreater(effects.time, 0)
-            game_framework.frame_time = effects.config['flash_s']
+            phase = effects.config['player_flash_phase_s']
+            game_framework.frame_time = phase
             play_mode.update()
             self.assertGreater(player.combat.time, previous)
-            self.assertFalse(effects.flashing(player))
+            self.assertEqual(effects.player_flash_color(), 'white')
+            self.assertGreater(flash_pixels(white), 100)
+            self.assertEqual(flash_pixels(red), 0)
+
+            self.assertEqual(player.combat.receive('invulnerable', enemy, 10, 10), 'invulnerable')
+            self.assertEqual(effects.player_flash_color(), 'white')
+            game_framework.frame_time = phase
+            play_mode.update()
+            self.assertEqual(effects.player_flash_color(), 'red')
+            self.assertGreater(flash_pixels(red), 100)
+            play_mode.update()
+            self.assertIsNone(effects.player_flash_color())
+            self.assertEqual(flash_pixels(red), 0)
         finally:
             play_mode.finish()
             pico2d.close_canvas()

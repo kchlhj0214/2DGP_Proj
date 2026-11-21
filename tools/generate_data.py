@@ -72,7 +72,7 @@ def validate_presentation(data):
     schemas = {
         'arena': {'art', 'water', 'ring_radius_px', 'wall_base_px', 'bank_drop_px', 'bridge_width_m'},
         'sprites': {'atlas', 'asset_dir', 'body_height_px', 'projectile_art'},
-        'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'number_s', 'rise_m',
+        'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'player_flash_phase_s', 'number_s', 'rise_m',
                    'shake_s', 'shake_m', 'max_shake_m'},
         'parry': {'push_height_ratio', 'push_s', 'raise_s', 'return_s', 'success_hold_s'},
         'beam': {'taper_width_ratio'},
@@ -121,6 +121,8 @@ def validate_presentation(data):
     impact = next(row for row in rows if row['id'] == 'impact')
     if not impact['hitstop_s'] < impact['flash_s'] < impact['number_s'] or impact['volume'] > 128:
         raise ValueError('피격 연출 길이 또는 음량 오류')
+    if not impact['hitstop_s'] < impact['player_flash_phase_s'] < impact['number_s'] / 3:
+        raise ValueError('플레이어 피격 점멸 타이밍 오류')
     if impact['max_shake_m'] <= impact['shake_m']:
         raise ValueError('최대 광선의 흔들림이 기본보다 작습니다')
     beam = next(row for row in rows if row['id'] == 'beam')
@@ -132,7 +134,7 @@ def validate_presentation(data):
 def validate_waves(data, scale, combat):
     from math import isfinite
     schemas = {
-        'settings': {'id', 'spawn_interval_s'},
+        'settings': {'id', 'spawn_interval_s', 'enemy_gap_m'},
         'waves': {'id', 'number', 'melee_id', 'ranged_id', 'melee_per_gate', 'ranged_per_gate'},
         'modes': {'id', 'key'},
         'single_modes': {'id', 'enemy_id', 'count'},

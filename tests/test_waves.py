@@ -175,11 +175,14 @@ class WaveTests(unittest.TestCase):
 class RangedTests(unittest.TestCase):
     def test_approach_stop_fire_immediately_then_three_seconds(self):
         player, waves = controller()
-        ranged = RangedEnemy('ranged-test', RANGED['ranged'], 11, 0, player, waves.add_projectile)
+        ranged = RangedEnemy('ranged-test', RANGED['ranged'], 16, 0, player, waves.add_projectile)
+        game_framework.frame_time = .1
+        ranged.update()
+        self.assertEqual(ranged.shots, 0)
         for _ in range(120):
             game_framework.frame_time = 1 / 240
             ranged.update()
-        self.assertAlmostEqual(ranged.x, 10)
+        self.assertAlmostEqual(ranged.x, 15)
         self.assertEqual(ranged.shots, 1)
         self.assertEqual(ranged.state, 'shoot')
         # 마지막 발사 시각을 기준으로 정확히 3초를 확인한다.

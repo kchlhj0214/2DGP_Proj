@@ -49,8 +49,8 @@ class SpriteLibrary:
             actor, action = clip['actor'], clip['action']
             directory = ROOT / SETTINGS['asset_dir']
             source = ATLAS_PATH.parent / clip['file']
-            white = directory / f'{actor}-{action}-flash.png'
-            images = (pico2d.load_image(str(source)), pico2d.load_image(str(white)))
+            flash_source = directory / f'{actor}-{action}-flash.png'
+            images = (pico2d.load_image(str(source)), pico2d.load_image(str(flash_source)))
             if any((image.w, image.h) != (self.cell * clip['frames'], self.cell * 8)
                    for image in images):
                 raise ValueError(f'스프라이트 시트 크기가 다릅니다: {actor}/{action}')
@@ -66,7 +66,11 @@ class SpriteLibrary:
         y += (self.anchor[1] - half) * scale
         size = self.cell * scale
         bottom = (7 - direction(angle)) * self.cell
-        images[bool(flash)].clip_draw(index * self.cell, bottom, self.cell, self.cell, x, y, size, size)
+        image = images[bool(flash)]
+        if actor == 'hero' and flash:
+            color = (250, 55, 52) if flash == 'red' else (255, 255, 255)
+            pico2d.SDL_SetTextureColorMod(image.texture, *color)
+        image.clip_draw(index * self.cell, bottom, self.cell, self.cell, x, y, size, size)
 
     def draw_projectile(self, projectile, camera):
         x, y = camera.to_screen(projectile.x, projectile.y)

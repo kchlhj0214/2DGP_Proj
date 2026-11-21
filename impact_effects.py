@@ -24,6 +24,7 @@ class ImpactEffects:
         self.config = VISUALS['impact']
         self.time = self.stop_until = self.shake_start = self.shake_m = 0.0
         self.flashes = {}
+        self.player_flash_at = None
         self.numbers = []
         self.font = self.sound = None
         if load_media:
@@ -44,12 +45,23 @@ class ImpactEffects:
         if amount <= 0:
             return
         self.stop_until = max(self.stop_until, self.time + self.config['hitstop_s'])
-        self.flashes[owner] = self.time + self.config['flash_s']
+        if player_hit:
+            self.player_flash_at = self.time
+        else:
+            self.flashes[owner] = self.time + self.config['flash_s']
         self.numbers.append(DamageNumber(owner.x, owner.y + owner.height * .65,
                                          amount, self.time, player_hit))
 
     def flashing(self, owner):
         return self.time < self.flashes.get(owner, 0.0)
+
+    def player_flash_color(self):
+        if self.player_flash_at is None:
+            return None
+        age = self.time - self.player_flash_at
+        phase = int(age / self.config['player_flash_phase_s'])
+        colors = ('red', 'white', 'red')
+        return colors[phase] if phase < len(colors) else None
 
     def beam(self, strongest):
         self.shake_start = self.time

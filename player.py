@@ -98,7 +98,7 @@ class Player:
         self.combat.draw()
         if not self.sprites:
             return
-        flash = self.effects and self.effects.flashing(self)
+        flash = self.effects and self.effects.player_flash_color()
         motion, angle, frame = self.visual_motion, self.visual_angle, None
         if self.combat.position_lock_remaining() > 1e-9:
             motion, angle, frame = 'parry', self.combat.aim, self.combat.parry_frame()

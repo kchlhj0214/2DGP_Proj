@@ -55,7 +55,7 @@ class SpacingTests(unittest.TestCase):
     def test_large_move_cannot_tunnel_through_enemy(self):
         player, first, second = self.actors()
         move_enemy(first, 5, 0)
-        self.assertLessEqual(first.x, second.x - (first.width + second.width)/2 + 1e-6)
+        self.assertAlmostEqual(second.get_bb()[0] - first.get_bb()[2], .7, places=6)
         self.assert_separate([first, second])
 
     def test_stunned_enemy_stays_put_and_dead_enemy_does_not_block(self):
