@@ -13,12 +13,15 @@ import game_framework
 import play_mode
 from combat_data import ENEMIES, SYSTEMS
 from enemy import MeleeEnemy
-from geometry import box_points, intersects, oriented_box
+from geometry import box_points, intersects, oriented_box, warning_strength
 
 
-def actor(x=1.6, y=0, identifier='one'):
+def actor(x=None, y=0, identifier='one'):
     arena, player, camera = scene()
-    enemy = MeleeEnemy(identifier, ENEMIES['melee'], x, y, player)
+    spec = ENEMIES['melee']
+    enemy = MeleeEnemy(identifier, spec, 0 if x is None else x, y, player)
+    if x is None:
+        enemy.x = enemy.attack_distance(0)
     player.targets = [enemy]
     return player, enemy
 
@@ -63,31 +66,53 @@ class CombatTests(unittest.TestCase):
         for count in range(1, 6):
             self.assertEqual(combat.receive(count, enemy, 10, 10), 'parry')
             self.assertEqual(combat.energy, min(count * 10, 40))
-        for energy, name, window in ((0, 'stage1', .3), (9, 'stage1', .3),
-                                    (10, 'stage2', .22), (20, 'stage3', .15),
-                                    (30, 'stage4', .1), (40, 'stage4', .1)):
+        for energy, name, window in ((0, 'stage1', .34), (9, 'stage1', .34),
+                                    (10, 'stage2', .26), (20, 'stage3', .18),
+                                    (30, 'stage4', .13), (40, 'stage4', .13)):
             combat.energy = energy
             self.assertEqual(combat.stage()['id'], name)
             self.assertEqual(combat.stage()['parry_window_s'], window)
+
+    def test_parry_saves_early_attempts_at_each_energy_stage(self):
+        for energy, elapsed in ((0, .32), (10, .24), (20, .165), (30, .115)):
+            with self.subTest(energy=energy):
+                player, enemy = actor()
+                combat = player.combat
+                combat.energy = energy
+                combat.right_down()
+                combat.advance(elapsed)
+                self.assertEqual(combat.receive('early', enemy, 10, 10), 'parry')
 
     def test_input_lock_guard_release_and_no_queue(self):
         player, _ = actor()
         combat = player.combat
         key(player, pico2d.SDL_KEYDOWN, pico2d.SDLK_d)
+        combat.energy = 10
         combat.right_down()
-        advance(player, [], .99)
+        advance(player, [], .5)
         self.assertEqual(player.x, 0)
+        advance(player, [], .49)
+        self.assertAlmostEqual(player.x, .49 * 22 / 3.6)
         self.assertFalse(combat.fire())
         combat.right_down()
         advance(player, [], .01)
         self.assertEqual(combat.state, 'guard')
         x = player.x
         advance(player, [], 1)
-        self.assertAlmostEqual(player.x - x, 7 / 3.6)
+        self.assertAlmostEqual(player.x - x, 14 / 3.6)
         combat.right_up()
         self.assertEqual(combat.state, 'free')
         combat.right_down()
         self.assertEqual(combat.state, 'raising')
+
+    def test_movement_lock_ends_inside_a_frame(self):
+        for dt in (1 / 240, 1 / 30, .57):
+            player, _ = actor()
+            key(player, pico2d.SDL_KEYDOWN, pico2d.SDLK_d)
+            player.combat.right_down()
+            advance(player, [], .57, dt=dt)
+            self.assertAlmostEqual(player.x, .07 * player.speed_mps)
+            self.assertEqual(player.visual_motion, 'run')
 
     def test_release_during_raise_does_not_cancel_lock(self):
         player, _ = actor()
@@ -130,10 +155,10 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(enemy.state, 'stunned')
         self.assertNotEqual(other.state, 'stunned')
         self.assertEqual(combat.success_invuln_until, until)
-        advance(player, [], .3)
+        advance(player, [], .449)
         self.assertEqual(combat.receive(3, other, 10, 10), 'invulnerable')
         self.assertEqual(combat.energy, 20)
-        advance(player, [], .65)
+        advance(player, [], .001)
         other.x = -1.6
         self.assertEqual(combat.receive(4, other, 10, 10), 'hit')
 
@@ -142,14 +167,14 @@ class CombatTests(unittest.TestCase):
         combat = player.combat
         combat.right_down()
         combat.receive(1, enemy, 10, 10)
-        self.assertEqual(combat.window, .3)
+        self.assertEqual(combat.window, .34)
         advance(player, [], .25)
         self.assertEqual(combat.receive(2, enemy, 10, 10), 'parry')
         combat.right_up()
         advance(player, [], .8)
         combat.right_down()
-        self.assertEqual(combat.window, .15)
-        advance(player, [], .16)
+        self.assertEqual(combat.window, .18)
+        advance(player, [], .19)
         self.assertEqual(combat.receive(3, enemy, 10, 10), 'hit')
         self.assertEqual(combat.receive(4, enemy, 10, 10), 'invulnerable')
         self.assertEqual(combat.energy, 20)
@@ -176,11 +201,27 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(player.combat.hp, 90)
         player, enemy = actor()
         advance(player, [enemy], .1)
-        angle = enemy.angle
+        attack_pose = enemy.x, enemy.y, enemy.angle
         player.y = 10
         advance(player, [enemy], .7)
-        self.assertEqual(enemy.angle, angle)
+        self.assertEqual((enemy.x, enemy.y, enemy.angle), attack_pose)
+        self.assertIn(enemy.state, ('swing', 'recovery'))
         self.assertEqual(player.combat.hp, 100)
+
+    def test_close_attack_distance_and_two_warning_flashes(self):
+        for angle in (0, pi / 4, pi / 2, 3 * pi / 4, pi):
+            player, enemy = actor(0)
+            distance = enemy.attack_distance(angle)
+            enemy.x, enemy.y = cos(angle) * (distance + 2), sin(angle) * (distance + 2)
+            advance(player, [enemy], .35)
+            self.assertEqual(enemy.state, 'chase')
+            advance(player, [enemy], .45)
+            self.assertEqual(enemy.state, 'windup')
+            self.assertAlmostEqual((enemy.x**2 + enemy.y**2)**.5, distance)
+            advance(player, [enemy], .65)
+            self.assertEqual(player.combat.hp, 90)
+        self.assertEqual([warning_strength(age, .6) for age in (.1, .26, .4, .56, .6)],
+                         [1, 0, 1, 0, 0])
 
     def test_beam_zero_energy_and_timing_width_damage(self):
         player, enemy = actor(5, 0)
@@ -188,7 +229,7 @@ class CombatTests(unittest.TestCase):
         player.combat.energy = 40
         self.assertTrue(player.combat.fire())
         beam = player.combat.beam
-        self.assertEqual((beam.ticks, enemy.hp, beam.width), (1, 40, 3.6))
+        self.assertEqual((beam.ticks, enemy.hp, beam.width), (1, 40, 4.2))
         self.assertEqual(player.combat.energy, 0)
         advance(player, [], .5)
         self.assertEqual((beam.ticks, enemy.hp), (2, 20))
@@ -200,21 +241,23 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(player.combat.state, 'free')
 
     def test_beam_origin_follows_but_direction_stays_and_no_queued_guard(self):
-        player, enemy = actor(5, 0)
-        other = MeleeEnemy('other', ENEMIES['melee'], 10, 0, player)
+        player, enemy = actor(6)
+        # Keep the target's top edge in the initial beam but below it after moving up.
+        enemy.y = player.y - enemy.height / 2 + .3
+        other = MeleeEnemy('other', ENEMIES['melee'], 11, enemy.y, player)
         player.targets.append(other)
         player.combat.energy = 10
         player.combat.fire()
         beam = player.combat.beam
         self.assertEqual((enemy.hp, other.hp), (55, 55))
-        self.assertEqual(beam.width, 1.8)
+        self.assertEqual(beam.width, 2.1)
         player.combat.aim = pi / 2
         key(player, pico2d.SDL_KEYDOWN, pico2d.SDLK_w)
         player.combat.right_down()
         self.assertFalse(player.combat.fire())
         advance(player, [], .5)
         self.assertEqual(beam.angle, 0)
-        self.assertAlmostEqual(player.y, 14 / 3.6 * .5)
+        self.assertAlmostEqual(player.y, 22 / 3.6 * .5)
         self.assertEqual((enemy.hp, other.hp), (55, 55))
         advance(player, [], 1)
         self.assertEqual(player.combat.state, 'free')
@@ -248,7 +291,8 @@ class CombatTests(unittest.TestCase):
         scale = json.loads((ROOT / 'data/scale.json').read_text(encoding='utf-8'))
         for sheet, field, value in (('enemies', 'character_id', 'missing'),
                                     ('systems', 'energy_max', None),
-                                    ('enemies', 'speed_kmph', 20),
+                                    ('enemies', 'speed_kmph', 22),
+                                    ('systems', 'guard_kmph', 22),
                                     ('stages', 'parry_window_s', 2)):
             data = copy.deepcopy(source)
             data[sheet][0][field] = value
@@ -263,7 +307,7 @@ class CombatRenderTests(unittest.TestCase):
             play_mode.init()
             player = play_mode.player
             enemy = play_mode.enemies[0]
-            enemy.x, enemy.y = 1.6, 0
+            enemy.x, enemy.y = enemy.attack_distance(0), 0
             for other in play_mode.enemies[1:]:
                 other.take_damage(60)
             advance(player, [enemy], .55)
@@ -318,7 +362,7 @@ class CombatRenderTests(unittest.TestCase):
             self.assertTrue(all(e.hp == 60 for e in play_mode.enemies))
             # 실제로 회전하는 칼의 판정을 그린다.
             enemy = play_mode.enemies[0]
-            enemy.x, enemy.y = 1.6, 0
+            enemy.x, enemy.y = enemy.attack_distance(0), 0
             advance(play_mode.player, [enemy], .68)
             self.assertEqual(enemy.state, 'swing')
             play_mode.render()

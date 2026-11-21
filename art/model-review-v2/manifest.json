@@ -1,0 +1,104 @@
+{
+  "status": "awaiting_visual_review",
+  "hero": {
+    "hand": "anatomical_left",
+    "rest_shield_yaw_deg": 90,
+    "body_pivot_m": [
+      0,
+      0,
+      0.96
+    ]
+  },
+  "melee": {
+    "sword_direction": [
+      0,
+      -0.55,
+      0.835
+    ],
+    "grip_m": [
+      -0.35,
+      -0.135,
+      0.93
+    ]
+  },
+  "preview": {
+    "fps": 24,
+    "resolution_px": 480,
+    "samples": 16,
+    "duration_s": 1.0
+  },
+  "parry": [
+    {
+      "id": "ready",
+      "frame": 1,
+      "wrist_m": [
+        0.405,
+        -0.23,
+        1.045
+      ],
+      "shield_yaw_deg": 90,
+      "shield_tilt_deg": 0,
+      "lean_deg": 0
+    },
+    {
+      "id": "draw_forward",
+      "frame": 4,
+      "wrist_m": [
+        0.26,
+        -0.3,
+        1.04
+      ],
+      "shield_yaw_deg": 35,
+      "shield_tilt_deg": 10,
+      "lean_deg": 6
+    },
+    {
+      "id": "upstroke",
+      "frame": 8,
+      "wrist_m": [
+        0.18,
+        -0.4,
+        1.24
+      ],
+      "shield_yaw_deg": 0,
+      "shield_tilt_deg": -12,
+      "lean_deg": 11
+    },
+    {
+      "id": "follow_through",
+      "frame": 11,
+      "wrist_m": [
+        0.18,
+        -0.35,
+        1.4
+      ],
+      "shield_yaw_deg": 0,
+      "shield_tilt_deg": -20,
+      "lean_deg": 9
+    },
+    {
+      "id": "recover",
+      "frame": 18,
+      "wrist_m": [
+        0.25,
+        -0.32,
+        1.19
+      ],
+      "shield_yaw_deg": 25,
+      "shield_tilt_deg": -5,
+      "lean_deg": 4
+    },
+    {
+      "id": "ready_end",
+      "frame": 25,
+      "wrist_m": [
+        0.405,
+        -0.23,
+        1.045
+      ],
+      "shield_yaw_deg": 90,
+      "shield_tilt_deg": 0,
+      "lean_deg": 0
+    }
+  ]
+}

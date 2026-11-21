@@ -2,13 +2,16 @@
 
 from math import atan2, ceil, cos, hypot, pi, sin
 
+from wave_data import SETTINGS
+
 EPSILON = 1e-7
+GAP = SETTINGS['main']['enemy_gap_m']
 
 
 def overlaps(enemy, x, y, other):
     return (other is not enemy and other.hp > 0
-            and abs(x - other.x) < (enemy.width + other.width) / 2 - EPSILON
-            and abs(y - other.y) < (enemy.height + other.height) / 2 - EPSILON)
+            and abs(x - other.x) < (enemy.width + other.width) / 2 + GAP - EPSILON
+            and abs(y - other.y) < (enemy.height + other.height) / 2 + GAP - EPSILON)
 
 
 def is_free(enemy, x, y):
@@ -25,7 +28,7 @@ def sweep_fraction(enemy, dx, dy):
         for position, delta, center, half in (
                 (enemy.x, dx, other.x, (enemy.width + other.width) / 2),
                 (enemy.y, dy, other.y, (enemy.height + other.height) / 2)):
-            low, high = center - half, center + half
+            low, high = center - half - GAP, center + half + GAP
             if abs(delta) < EPSILON:
                 if not low + EPSILON < position < high - EPSILON:
                     enter, leave = 1.0, -1.0
@@ -71,7 +74,7 @@ def spawn_position(enemy, x, y):
     """입구가 막혀도 출현을 지연하지 않고 같은 입구 주변 원둘레의 빈 자리에 배치."""
     radius = enemy.player.arena.radius
     angle = atan2(y, x)
-    angular_step = (max(enemy.width, enemy.height) + EPSILON * 4) / radius
+    angular_step = (max(enemy.width, enemy.height) + GAP + EPSILON * 4) / radius
     count = ceil(2 * pi / angular_step)
     for index in range(count * 2 + 1):
         offset = (index + 1) // 2 * (1 if index % 2 else -1)

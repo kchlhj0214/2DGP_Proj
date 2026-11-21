@@ -1,0 +1,74 @@
+{
+  "status": "awaiting_user_approval",
+  "model_stats": {
+    "hero": {
+      "meshes": 252,
+      "vertices": 19111,
+      "z_min_m": 0.0,
+      "z_max_m": 1.8439874649047852
+    },
+    "melee": {
+      "meshes": 191,
+      "vertices": 11414,
+      "z_min_m": 0.0,
+      "z_max_m": 1.8281999826431274
+    },
+    "ranged": {
+      "meshes": 188,
+      "vertices": 12365,
+      "z_min_m": 0.0,
+      "z_max_m": 1.8181999921798706
+    }
+  },
+  "runtime_modified": false,
+  "views": [
+    {
+      "id": "front",
+      "azimuth_deg": 0
+    },
+    {
+      "id": "front_right",
+      "azimuth_deg": 45
+    },
+    {
+      "id": "right",
+      "azimuth_deg": 90
+    },
+    {
+      "id": "back_right",
+      "azimuth_deg": 135
+    },
+    {
+      "id": "back",
+      "azimuth_deg": 180
+    },
+    {
+      "id": "back_left",
+      "azimuth_deg": 225
+    },
+    {
+      "id": "left",
+      "azimuth_deg": 270
+    },
+    {
+      "id": "front_left",
+      "azimuth_deg": 315
+    }
+  ],
+  "render": [
+    {
+      "id": "model_review",
+      "resolution_px": 640,
+      "elevation_deg": 12,
+      "orthographic_scale_m": 2.55,
+      "samples": 24
+    },
+    {
+      "id": "game_angle_review",
+      "resolution_px": 160,
+      "elevation_deg": 40,
+      "orthographic_scale_m": 2.65,
+      "samples": 24
+    }
+  ]
+}

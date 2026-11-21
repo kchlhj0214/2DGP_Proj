@@ -1,15 +1,22 @@
 """원형 경기장. 전달받은 경계 판정용 직사각형을 원 내부로 제한한다."""
 
-from math import ceil, floor, hypot, sqrt
+from math import hypot, sqrt
+from pathlib import Path
 
 import pico2d
+from presentation_data import VISUALS
 
 
 class Arena:
     def __init__(self, data, viewport, camera):
         self.radius = viewport['height_m'] * data['diameter_height_ratio'] / 2
-        self.grid_m = data['grid_m']
         self.camera = camera
+        self.art = ()
+
+    def load_art(self):
+        root = Path(__file__).resolve().parent
+        settings = VISUALS['arena']
+        self.art = tuple(pico2d.load_image(str(root / settings[name])) for name in ('art', 'water'))
 
     def update(self):
         pass
@@ -38,41 +45,7 @@ class Arena:
 
     def draw(self):
         camera = self.camera
-        # 원 밖에도 월드 좌표에 맞춘 지면을 그리지만 이동 경계는 원 그대로다.
-        left = camera.x - camera.width_m / 2
-        right = camera.x + camera.width_m / 2
-        bottom = camera.y - camera.height_m / 2
-        top = camera.y + camera.height_m / 2
-        for index in range(floor(left / self.grid_m), ceil(right / self.grid_m) + 1):
-            x, _ = camera.to_screen(index * self.grid_m, camera.y)
-            pico2d.draw_line(x, 0, x, camera.height_px, 23, 33, 43)
-        for index in range(floor(bottom / self.grid_m), ceil(top / self.grid_m) + 1):
-            _, y = camera.to_screen(camera.x, index * self.grid_m)
-            pico2d.draw_line(0, y, camera.width_px, y, 23, 33, 43)
-        cx, cy = camera.to_screen(0, 0)
-        radius_px = round(self.radius * camera.pixels_per_meter)
-        pico2d.draw_circle(cx, cy, radius_px, 28, 39, 48, filled=True)
-
-        # 1m 격자를 원 내부에만 그린다. 이동과 크기 비교용 기준선.
-        steps = int(ceil(self.radius / self.grid_m))
-        for index in range(-steps, steps + 1):
-            value = index * self.grid_m
-            if abs(value) >= self.radius:
-                continue
-            reach = sqrt(self.radius ** 2 - value ** 2)
-            color = (62, 82, 91) if index % 5 == 0 else (39, 54, 63)
-            x1, y1 = camera.to_screen(value, -reach)
-            x2, y2 = camera.to_screen(value, reach)
-            pico2d.draw_line(x1, y1, x2, y2, *color)
-            x1, y1 = camera.to_screen(-reach, value)
-            x2, y2 = camera.to_screen(reach, value)
-            pico2d.draw_line(x1, y1, x2, y2, *color)
-        pico2d.draw_circle(cx, cy, radius_px, 122, 176, 184)
-        # 상하좌우 입구 위치만 표시한다. 출현 기능은 아직 구현하지 않는다.
-        for x, y in ((0, self.radius), (0, -self.radius),
-                     (self.radius, 0), (-self.radius, 0)):
-            px, py = camera.to_screen(x, y)
-            pico2d.draw_rectangle(px - 5, py - 5, px + 5, py + 5,
-                                  237, 179, 92, filled=True)
-        pico2d.draw_line(cx - 8, cy, cx + 8, cy, 140, 166, 175)
-        pico2d.draw_line(cx, cy - 8, cx, cy + 8, 140, 166, 175)
+        center_x, center_y = camera.to_screen(0, 0)
+        scale = self.radius * camera.pixels_per_meter / VISUALS['arena']['ring_radius_px']
+        for image in self.art:
+            image.draw(center_x, center_y, round(image.w * scale), round(image.h * scale))

@@ -2,8 +2,6 @@
 
 from math import cos, hypot, pi, sin
 
-import pico2d
-
 import game_framework
 from geometry import box_points, circle_intersects_polygon
 
@@ -37,8 +35,5 @@ class Projectile:
             self.active, self.result = False, 'boundary'
 
     def draw(self):
-        if self.active:
-            camera = self.player.camera
-            x, y = camera.to_screen(self.x, self.y)
-            pico2d.draw_circle(x, y, max(1, round(self.radius * camera.pixels_per_meter)),
-                              255, 204, 112, filled=True)
+        if self.active and self.player.sprites:
+            self.player.sprites.draw_projectile(self, self.player.camera)

@@ -22,7 +22,7 @@ class SpacingTests(unittest.TestCase):
     def actors(self):
         arena, player, camera = scene()
         first = MeleeEnemy('first', ENEMIES['melee'], 0, 0, player)
-        second = RangedEnemy('second', RANGED['ranged'], 2, 0, player, lambda p: None)
+        second = RangedEnemy('second', RANGED['ranged'], first.width + .8, 0, player, lambda p: None)
         player.targets = [first, second]
         return player, first, second
 
@@ -32,7 +32,10 @@ class SpacingTests(unittest.TestCase):
             for other in live[index + 1:]:
                 self.assertFalse(overlaps(enemy, enemy.x, enemy.y, other),
                                  f'{enemy.identifier} / {other.identifier}')
-            self.assertTrue(enemy.player.arena.contains_box(enemy.x, enemy.y - .45, .9, .9))
+            foot_height = enemy.player.boundary_height
+            foot_offset = (enemy.height - foot_height) / 2
+            self.assertTrue(enemy.player.arena.contains_box(enemy.x, enemy.y - foot_offset,
+                                                            enemy.width, foot_height))
 
     def test_second_damage_at_half_second_without_extending_immunity(self):
         player, first, second = self.actors()
@@ -52,7 +55,7 @@ class SpacingTests(unittest.TestCase):
     def test_large_move_cannot_tunnel_through_enemy(self):
         player, first, second = self.actors()
         move_enemy(first, 5, 0)
-        self.assertLessEqual(first.x, second.x - .9 + 1e-6)
+        self.assertAlmostEqual(second.get_bb()[0] - first.get_bb()[2], .7, places=6)
         self.assert_separate([first, second])
 
     def test_stunned_enemy_stays_put_and_dead_enemy_does_not_block(self):

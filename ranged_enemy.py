@@ -2,51 +2,60 @@
 
 from math import atan2, hypot
 
-import pico2d
-
 import game_framework
 from enemy import MeleeEnemy
 from projectile import Projectile
-from enemy_spacing import move_enemy
 
 
 class RangedEnemy(MeleeEnemy):
     can_be_stunned = False
+    sprite_actor = 'ranged'
+    death_action = 'ash'
+    recoil_action = 'stagger'
 
     def __init__(self, identifier, data, x, y, player, add_projectile):
         super().__init__(identifier, data, x, y, player)
         self.add_projectile = add_projectile
         self.cooldown = 0.0
         self.shots = 0
+        self.cast_age = float('inf')
 
     def stun(self, duration):
         # 원거리 적은 패링으로 스턴하지 않는다.
         pass
 
     def update(self):
-        if self.hp <= 0 or self.player.combat.hp <= 0:
+        if self.hp <= 0:
+            super().update()
+            return
+        if self.player.combat.hp <= 0:
             return
         dt = game_framework.frame_time
         self.cooldown = max(0.0, self.cooldown - dt)
+        self.cast_age += dt
+        if self.advance_recoil(dt):
+            return
         dx, dy = self.player.x - self.x, self.player.y - self.y
         distance = hypot(dx, dy)
+        if distance > 0:
+            self.angle = atan2(dy, dx)
         if distance > self.data['range_m'] + 1e-9:
             self.state = 'chase'
             step = min(distance - self.data['range_m'], self.data['speed_kmph'] / 3.6 * dt)
-            move_enemy(self, dx / distance * step, dy / distance * step)
+            self.walk_toward(dx / distance * step, dy / distance * step, dt)
             return
         self.state = 'shoot'
+        self.moving, self.visual_time = False, 0.0
         if self.cooldown <= 1e-9:
             self.shots += 1
             self.add_projectile(Projectile(('bullet', self.identifier, self.shots), self.x, self.y,
-                                           atan2(dy, dx), self.data, self.player))
+                                           self.angle, self.data, self.player))
             self.cooldown = self.data['attack_interval_s']
+            self.cast_age = 0.0
 
-    def draw(self):
-        if self.hp > 0:
-            super().draw()
-            camera = self.player.camera
-            x1, y1 = camera.to_screen(self.x - self.width / 2, self.y - self.height / 2)
-            x2, y2 = camera.to_screen(self.x + self.width / 2, self.y + self.height / 2)
-            pico2d.draw_rectangle(x1, y1, x2, y2, 114, 170, 245, filled=True)
-            pico2d.draw_rectangle(x1, y1, x2, y2, 207, 230, 255)
+    def pose(self):
+        if self.recoil_age is not None:
+            return super().pose()
+        if self.state == 'shoot' and self.cast_age < .5 and self.player.sprites:
+            return 'cast', self.cast_age * self.player.sprites.fps
+        return ('walk' if self.moving and self.state == 'chase' else 'idle'), None

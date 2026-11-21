@@ -1,11 +1,11 @@
 # 자동 생성 파일: data/waves.json을 수정한 뒤 tools/generate_data.py 실행
-SETTINGS = {'main': {'id': 'main', 'spawn_interval_s': 0.3}}
+SETTINGS = {'main': {'id': 'main', 'spawn_interval_s': 0.3, 'enemy_gap_m': 0.7}}
 
 WAVES = {'wave1': {'id': 'wave1',
            'number': 1,
            'melee_id': 'melee',
            'ranged_id': 'ranged',
-           'melee_per_gate': 2,
+           'melee_per_gate': 1,
            'ranged_per_gate': 1},
  'wave2': {'id': 'wave2',
            'number': 2,
@@ -43,10 +43,10 @@ RANGED = {'ranged': {'id': 'ranged',
             'character_id': 'player',
             'hp': 60,
             'speed_kmph': 10,
-            'range_m': 10,
+            'range_m': 15,
             'attack_interval_s': 3,
             'projectile_speed_mps': 8,
-            'projectile_radius_m': 0.15,
+            'projectile_radius_m': 0.7,
             'damage': 10,
             'energy_gain': 10}}
 

@@ -1,0 +1,626 @@
+[
+  {
+    "file": "hero-front.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      192,
+      96,
+      520,
+      561
+    ]
+  },
+  {
+    "file": "hero-game-front.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      48,
+      35,
+      129,
+      132
+    ]
+  },
+  {
+    "file": "hero-front_right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      207,
+      96,
+      408,
+      567
+    ]
+  },
+  {
+    "file": "hero-game-front_right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      52,
+      35,
+      102,
+      136
+    ]
+  },
+  {
+    "file": "hero-right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      215,
+      95,
+      376,
+      564
+    ]
+  },
+  {
+    "file": "hero-game-right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      54,
+      35,
+      94,
+      134
+    ]
+  },
+  {
+    "file": "hero-back_right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      117,
+      97,
+      408,
+      563
+    ]
+  },
+  {
+    "file": "hero-game-back_right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      31,
+      35,
+      102,
+      133
+    ]
+  },
+  {
+    "file": "hero-back.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      120,
+      98,
+      448,
+      556
+    ]
+  },
+  {
+    "file": "hero-game-back.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      31,
+      36,
+      111,
+      128
+    ]
+  },
+  {
+    "file": "hero-back_left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      232,
+      97,
+      433,
+      563
+    ]
+  },
+  {
+    "file": "hero-game-back_left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      58,
+      31,
+      108,
+      133
+    ]
+  },
+  {
+    "file": "hero-left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      264,
+      96,
+      425,
+      564
+    ]
+  },
+  {
+    "file": "hero-game-left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      65,
+      33,
+      106,
+      134
+    ]
+  },
+  {
+    "file": "hero-front_left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      232,
+      96,
+      522,
+      567
+    ]
+  },
+  {
+    "file": "hero-game-front_left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      58,
+      35,
+      129,
+      136
+    ]
+  },
+  {
+    "file": "melee-front.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      183,
+      95,
+      418,
+      560
+    ]
+  },
+  {
+    "file": "melee-game-front.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      47,
+      34,
+      104,
+      131
+    ]
+  },
+  {
+    "file": "melee-front_right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      182,
+      97,
+      397,
+      565
+    ]
+  },
+  {
+    "file": "melee-game-front_right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      46,
+      35,
+      99,
+      134
+    ]
+  },
+  {
+    "file": "melee-right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      258,
+      100,
+      354,
+      563
+    ]
+  },
+  {
+    "file": "melee-game-right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      64,
+      37,
+      89,
+      133
+    ]
+  },
+  {
+    "file": "melee-back_right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      225,
+      98,
+      380,
+      554
+    ]
+  },
+  {
+    "file": "melee-game-back_right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      56,
+      36,
+      95,
+      128
+    ]
+  },
+  {
+    "file": "melee-back.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      222,
+      97,
+      457,
+      544
+    ]
+  },
+  {
+    "file": "melee-game-back.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      56,
+      35,
+      113,
+      123
+    ]
+  },
+  {
+    "file": "melee-back_left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      243,
+      98,
+      457,
+      554
+    ]
+  },
+  {
+    "file": "melee-game-back_left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      61,
+      36,
+      114,
+      128
+    ]
+  },
+  {
+    "file": "melee-left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      286,
+      100,
+      382,
+      562
+    ]
+  },
+  {
+    "file": "melee-game-left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      71,
+      37,
+      96,
+      136
+    ]
+  },
+  {
+    "file": "melee-front_left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      260,
+      97,
+      416,
+      565
+    ]
+  },
+  {
+    "file": "melee-game-front_left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      65,
+      35,
+      104,
+      137
+    ]
+  },
+  {
+    "file": "ranged-front.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      201,
+      101,
+      438,
+      560
+    ]
+  },
+  {
+    "file": "ranged-game-front.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      51,
+      35,
+      109,
+      131
+    ]
+  },
+  {
+    "file": "ranged-front_right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      207,
+      101,
+      383,
+      566
+    ]
+  },
+  {
+    "file": "ranged-game-front_right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      52,
+      35,
+      96,
+      138
+    ]
+  },
+  {
+    "file": "ranged-right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      275,
+      102,
+      366,
+      567
+    ]
+  },
+  {
+    "file": "ranged-game-right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      68,
+      36,
+      92,
+      138
+    ]
+  },
+  {
+    "file": "ranged-back_right.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      212,
+      103,
+      388,
+      557
+    ]
+  },
+  {
+    "file": "ranged-game-back_right.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      53,
+      37,
+      97,
+      131
+    ]
+  },
+  {
+    "file": "ranged-back.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      202,
+      103,
+      439,
+      544
+    ]
+  },
+  {
+    "file": "ranged-game-back.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      51,
+      35,
+      109,
+      123
+    ]
+  },
+  {
+    "file": "ranged-back_left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      257,
+      92,
+      434,
+      554
+    ]
+  },
+  {
+    "file": "ranged-game-back_left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      64,
+      26,
+      108,
+      128
+    ]
+  },
+  {
+    "file": "ranged-left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      274,
+      91,
+      365,
+      562
+    ]
+  },
+  {
+    "file": "ranged-game-left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      68,
+      25,
+      92,
+      133
+    ]
+  },
+  {
+    "file": "ranged-front_left.png",
+    "size": [
+      640,
+      640
+    ],
+    "visible_bounds": [
+      252,
+      101,
+      428,
+      565
+    ]
+  },
+  {
+    "file": "ranged-game-front_left.png",
+    "size": [
+      160,
+      160
+    ],
+    "visible_bounds": [
+      63,
+      33,
+      107,
+      135
+    ]
+  }
+]
