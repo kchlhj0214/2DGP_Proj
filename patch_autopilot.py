@@ -1,13 +1,17 @@
 """Exercise the real player and enemies only during a Patch Desktop test."""
 
+from math import pi
+
 import pico2d
 
 from enemy_spacing import is_free
+from projectile import Projectile
+from wave_data import RANGED
 
 
 class PatchRound:
     checks = ('arena-loads', 'parry-moves-enemy', 'beam-three-pulses', 'ranged-fires',
-              'player-hit-flashes', 'enemies-stay-apart')
+              'player-hit-flashes', 'enemies-stay-apart', 'walking-guard-blocks-side')
 
     def __init__(self, mode, report):
         self.mode = mode
@@ -19,6 +23,7 @@ class PatchRound:
         self.triggered = False
         self.beam = None
         self.hit_colors = []
+        self.side_shot = None
         self.mode.waves.load(4)
         self.mode.player.y = 23.0
         self.mode.player.pressed_keys.add(pico2d.SDLK_w)
@@ -85,4 +90,17 @@ class PatchRound:
             if any(not is_free(enemy, enemy.x, enemy.y) for enemy in enemies):
                 self.write('fail', ': enemies moved inside the spacing gap')
             elif self.age >= 2 and len(enemies) == 16:
+                self.mode.waves.load(4, 'all')
+                combat.aim = -pi / 2
+                combat.right_down()
+                player.pressed_keys.add(pico2d.SDLK_d)
                 self.write('pass')
+        elif self.index == 6:
+            if self.side_shot is None and combat.walking_guard():
+                self.side_shot = Projectile('guard-side', player.x + 4, player.y, pi, RANGED['ranged'], player)
+                self.mode.waves.add_projectile(self.side_shot)
+            elif self.side_shot is not None and self.side_shot.result:
+                if self.side_shot.result != 'block':
+                    self.write('fail', ': side projectile was not blocked during guard walk')
+                elif self.age >= 1.55:
+                    self.write('pass')
