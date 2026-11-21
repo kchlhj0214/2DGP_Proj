@@ -238,6 +238,17 @@ class RangedTests(unittest.TestCase):
         self.assertEqual(player.combat.beam.ticks, 1)
         self.assertLess(player.combat.beam.age, .5)
 
+    def test_walking_guard_blocks_side_projectile(self):
+        player, _ = controller()
+        player.combat.aim = -pi / 2
+        player.combat.right_down()
+        game_framework.frame_time = 1
+        player.update()
+        player.pressed_keys.add(pico2d.SDLK_d)
+        bullet = Projectile('side', 3, 0, pi, RANGED['ranged'], player)
+        move_bullet(player, bullet, .3)
+        self.assertEqual((bullet.result, player.combat.hp, player.combat.energy), ('block', 100, 0))
+
 
 class DebugInputRenderTests(unittest.TestCase):
     def test_debug_keys_through_game_mode_and_real_render(self):

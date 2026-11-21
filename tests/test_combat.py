@@ -141,6 +141,36 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(combat.receive(2, enemy, 10, 10), 'hit')
         self.assertEqual(combat.hp, 90)
 
+    def test_walking_guard_uses_forward_half_circle_and_stationary_guard_resumes(self):
+        for offset, expected in ((-91, 'hit'), (-90, 'block'), (60, 'block'),
+                                 (90, 'block'), (91, 'hit'), (180, 'hit')):
+            with self.subTest(offset=offset):
+                player, enemy = actor()
+                combat = player.combat
+                combat.aim = pi / 2
+                combat.right_down()
+                advance(player, [], 1)
+                key(player, pico2d.SDL_KEYDOWN, pico2d.SDLK_a)
+                advance(player, [], .1)
+                self.assertEqual(player.visual_motion, 'guard_walk')
+                self.assertEqual(player.visual_angle, pi / 2)
+                self.assertLess(player.x, 0)
+                direction = combat.aim + offset * pi / 180
+                enemy.x = player.x + 2 * cos(direction)
+                enemy.y = player.y + 2 * sin(direction)
+                with patch('defense.draw_sector') as sector, patch.object(player, 'sprites') as sprites:
+                    player.draw()
+                    self.assertEqual(sector.call_args.args[2:5:2], (combat.aim, pi))
+                    self.assertEqual(sprites.draw.call_args.args[:2], ('hero', 'guard_walk_front'))
+                    self.assertEqual(sprites.draw.call_args.args[4], combat.aim)
+                self.assertEqual(combat.receive('walking', enemy, 10, 10), expected)
+                self.assertEqual(combat.energy, 0)
+                if offset == 60:
+                    key(player, pico2d.SDL_KEYUP, pico2d.SDLK_a)
+                    advance(player, [], 1 / 240)
+                    self.assertEqual(player.visual_motion, 'guard')
+                    self.assertEqual(combat.receive('stationary', enemy, 10, 10), 'hit')
+
     def test_multi_parry_one_stun_and_no_invulnerability_extension(self):
         player, enemy = actor()
         other = MeleeEnemy('other', ENEMIES['melee'], 1.6, .2, player)

@@ -14,6 +14,15 @@
     "direction": "S",
     "outline": [[156,81],[163,78],[167,87],[163,94],[173,102],[178,129],[179,144],[175,153],[166,156],[160,145],[163,129],[159,110],[152,97],[152,88]]
   },
+  "guard_walk_shield": {
+    "base_action": "guard_walk",
+    "face_direction": "SW",
+    "edge_direction": "NW",
+    "size_px": [96, 108],
+    "depth_scale": 3.2,
+    "left_bias_px": 10,
+    "chest_ratio": 0.68
+  },
   "underpaint": {
     "hero": {
       "S": {"file": "hero-S.png", "mirror": false, "offset": [0, 0]},

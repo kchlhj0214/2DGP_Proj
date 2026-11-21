@@ -1,6 +1,6 @@
 {
   "systems": [
-    {"id": "main", "player_hp": 100, "guard_kmph": 14, "input_lock_s": 1, "parry_move_lock_s": 0.5, "success_invuln_s": 0.5, "hit_invuln_s": 0.5, "stun_s": 1.5, "guard_angle_deg": 90, "parry_push_range_m": 2.4, "energy_max": 40, "damage_multiplier": 0.5, "beam_duration_s": 1.5, "beam_tick_s": 0.5, "step_s": 0.004166666666666667}
+    {"id": "main", "player_hp": 100, "guard_kmph": 14, "input_lock_s": 1, "parry_move_lock_s": 0.5, "success_invuln_s": 0.5, "hit_invuln_s": 0.5, "stun_s": 1.5, "guard_angle_deg": 90, "guard_walk_angle_deg": 180, "parry_push_range_m": 2.4, "energy_max": 40, "damage_multiplier": 0.5, "beam_duration_s": 1.5, "beam_tick_s": 0.5, "step_s": 0.004166666666666667}
   ],
   "stages": [
     {"id": "stage1", "energy_min": 0, "parry_window_s": 0.34, "beam_width_m": 2.1},

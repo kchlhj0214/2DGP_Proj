@@ -22,6 +22,8 @@ SIDES = ("right", "left")
 SOURCE = ROOT / "art/pixellab-motion/rotations"
 ASSETS = ROOT / "assets/pixellab-sprites"
 UNDERPAINT = SOURCE.parent / "underpaint"
+GUARD_SHIELD = RIGS["guard_walk_shield"]
+GUARD_WALK_FRONT = "guard_walk_front"
 PIXEL_NEIGHBORS = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
 
 
@@ -164,6 +166,17 @@ def clean_pixel_art(frame, keep_magic):
     return Image.fromarray(pixels)
 
 
+def guard_shield_plates(face_layer, edge_layer):
+    width, height = GUARD_SHIELD["size_px"]
+    face = face_layer.crop(face_layer.getbbox()).resize((width, height), Image.Resampling.NEAREST)
+    edge = edge_layer.crop(edge_layer.getbbox()).resize((round(width * .25), height), Image.Resampling.NEAREST)
+    # Keep the shield's real rim, with dark wood on the side that faces its owner.
+    wood = ImageOps.colorize(ImageOps.grayscale(face).filter(ImageFilter.GaussianBlur(3)),
+                            "#231811", "#72543c")
+    wood.putalpha(face.getchannel("A").filter(ImageFilter.MinFilter(15)))
+    return face, edge, Image.alpha_composite(face, wood)
+
+
 @dataclass
 class Piece:
     name: str
@@ -191,6 +204,7 @@ class Rig:
         if actor == "ranged":
             fringe_joints = ("right_hand", "left_hand")
         self.pieces, self.gear, self.gear_center = self.split(image, marks["gear"], underpaint, fringe_joints)
+        self.guard_shield = None
         self.grip_patch = None
         if actor == "ranged":
             source = np.asarray(image)
@@ -230,6 +244,10 @@ class Rig:
             paint = np.asarray(underpaint)
             covered = mask & (paint[:, :, 3] > 0)
             body[covered] = paint[covered]
+        if self.actor == "hero":
+            hips = (self.joints["left_hip"] + self.joints["right_hip"]) / 2
+            trunk = distance_to_segment(x, y, self.joints["neck"], hips) < 26 ** 2
+            self.guard_torso = rgba_layer(body, trunk, overlap=0)
         bones = [("head", "head", "neck"), ("body", "neck", "waist")]
         for side in SIDES:
             for start, end in (("shoulder", "elbow"), ("elbow", "hand"),
@@ -259,11 +277,39 @@ class Rig:
         owners = reassign_fragments(owners, opaque, forearms)
         pieces = [Piece(name, start, end, rgba_layer(body, owners == index, overlap=3))
                   for index, (name, start, end) in enumerate(bones)]
+        if self.actor == "hero":
+            self.guard_arm = {}
+            for piece in pieces:
+                if piece.name not in ("left_elbow", "left_hand"):
+                    continue
+                limb = distance_to_segment(x, y, self.joints[piece.start], self.joints[piece.end])
+                radius = 18 if piece.name == "left_elbow" else 15
+                self.guard_arm[piece.name] = rgba_layer(np.asarray(piece.image), limb <= radius ** 2, overlap=0)
         return pieces, gear_image, center
+
+    def set_guard_shield(self, plates):
+        face, edge, back = plates
+        sideways = math.cos(self.angle)
+        if abs(sideways) < 1e-9:
+            profile = ImageOps.mirror(edge) if self.forward.real > 0 else edge
+            shield = Image.new("RGBA", (CELL, CELL))
+            shield.paste(profile, (round(ORIGIN.real - profile.width / 2),
+                                  round(ORIGIN.imag - profile.height / 2)))
+        else:
+            plate = face if sideways > 0 else back
+            # Project the upright disc across the direction the torso is facing.
+            scale = abs(sideways)
+            shear = -.28 * math.sin(self.angle) / sideways
+            shield = plate.transform((CELL, CELL), Image.Transform.AFFINE,
+                                     (1 / scale, 0, plate.width / 2 - ORIGIN.real / scale,
+                                      -shear, 1, plate.height / 2 - ORIGIN.imag + shear * ORIGIN.real),
+                                     resample=Image.Resampling.NEAREST)
+        self.guard_shield = shield
 
     def pose(self, action, index, row):
         joints = self.joints.copy()
-        gait = MOTION["gaits"].get(action)
+        gait_action = GUARD_SHIELD["base_action"] if action == GUARD_WALK_FRONT else action
+        gait = MOTION["gaits"].get(gait_action)
         gear_turn, gear_pitch = 0, 0
         if action == "idle":
             motion = math.sin(math.tau * index / 8) ** 2 * 1.4
@@ -288,7 +334,7 @@ class Rig:
                 if name != "waist" and not name.endswith("hip"):
                     joints[name] += tilt
             joints["head"] += tilt * 0.29
-            stride_scale = {"run": 2.15, "guard_walk": 2.8}.get(action, 2.2)
+            stride_scale = {"run": 2.15, "guard_walk": 2.8}.get(gait_action, 2.2)
             feet_center = (self.joints["right_foot"] + self.joints["left_foot"]) / 2
             for side, phase in zip(SIDES, (0, len(gait) // 2)):
                 stride, lift, _, swing = gait[(index + phase) % len(gait)]
@@ -301,7 +347,7 @@ class Rig:
                     joints[knee] -= tuck * .55
                 joints[foot] += travel - lift * 1.65j
                 joints[knee] += travel * 0.52 - lift * (0.75 if running else 0.54) * 1j
-                if action != "guard_walk" or side != self.gear_side:
+                if gait_action != "guard_walk" or side != self.gear_side:
                     weight = 1.5
                     if side == self.gear_side:
                         weight = 0.36 if running else 0.55
@@ -313,7 +359,14 @@ class Rig:
         if action == "stagger":
             gear_turn, gear_pitch = self.stagger(joints, row)
         hand = joints[self.grip]
-        if action in {"guard", "guard_walk", "parry"}:
+        if action == GUARD_WALK_FRONT:
+            cross = complex(math.cos(self.angle), -.48 * math.sin(self.angle))
+            neck, waist = joints["neck"], joints["waist"]
+            chest = neck + (waist - neck) * GUARD_SHIELD["chest_ratio"]
+            reach = (row["shield_forward"] - 5) * GUARD_SHIELD["depth_scale"]
+            hand = chest + self.forward * reach + cross * GUARD_SHIELD["left_bias_px"]
+            hand -= (row["shield_up"] - 12) * 1.64j
+        elif action in {"guard", "guard_walk", "parry"}:
             guard = self.forward * (row["shield_forward"] - 5) * 1.35
             rise = (row["shield_up"] - 1) * (2.08 if action == "parry" else 1.64)
             hand += guard - rise * 1j
@@ -343,7 +396,7 @@ class Rig:
             gear_turn = (1 if self.forward.real >= 0 else -1) * (row["blade_angle"] - 61) * 0.016
         joints[self.grip] = hand
         swing = hand - self.joints[self.grip]
-        if action in {"guard", "guard_walk", "parry", "chop", "deflected", "cast"}:
+        if action in {"guard", "guard_walk", GUARD_WALK_FRONT, "parry", "chop", "deflected", "cast"}:
             shoulder_name = f"{self.gear_side}_shoulder"
             elbow_name = f"{self.gear_side}_elbow"
             elbow, shoulder = self.joints[elbow_name], self.joints[shoulder_name]
@@ -351,9 +404,14 @@ class Rig:
             forearm = abs(self.joints[self.grip] - elbow)
             reach = hand - joints[shoulder_name]
             excess = max(0, abs(reach) - (upper + forearm) * 1.14)
-            if excess > 0:
+            if excess > 0 and action != GUARD_WALK_FRONT:
                 joints[shoulder_name] += reach / abs(reach) * min(excess, 14)
-            joints[elbow_name] += swing * upper / (upper + forearm)
+            if action == GUARD_WALK_FRONT:
+                # Keep the upper arm anchored to the shoulder while the forearm crosses the chest.
+                forearm_shift = hand - (self.joints[self.grip] + joints["neck"] - self.joints["neck"])
+                joints[elbow_name] += forearm_shift * min(.42, 15 / max(1, abs(forearm_shift)))
+            else:
+                joints[elbow_name] += swing * upper / (upper + forearm)
         return joints, gear_turn, gear_pitch
 
     def stagger(self, joints, row):
@@ -412,10 +470,16 @@ class Rig:
             return self.transform(self.image, self.base, self.base), self.offset + self.gear_center * self.scale
         joints, turn, pitch = self.pose(action, index, row)
         grip = self.joints[self.grip]
-        gear = self.transform(self.gear, grip, joints[self.grip],
-                              complex(math.cos(turn), math.sin(turn)), math.cos(pitch))
         frame = Image.new("RGBA", (CELL, CELL))
-        front = self.gear_side == self.near or self.forward.imag >= 0
+        if action == GUARD_WALK_FRONT:
+            gear = self.transform(self.guard_shield, ORIGIN, joints[self.grip])
+            front = self.forward.imag >= -1e-9
+            center = 0j
+        else:
+            rotation = complex(math.cos(turn), math.sin(turn))
+            gear = self.transform(self.gear, grip, joints[self.grip], rotation, math.cos(pitch))
+            front = self.gear_side == self.near or self.forward.imag >= 0
+            center = (self.gear_center - grip) * rotation
         grip_patch = None
         if self.grip_patch is not None:
             grip_patch = self.transform(self.grip_patch, grip, joints[self.grip])
@@ -423,6 +487,8 @@ class Rig:
             frame.alpha_composite(gear)
             if grip_patch is not None:
                 frame.alpha_composite(grip_patch)
+        if action == GUARD_WALK_FRONT:
+            frame.alpha_composite(self.transform(self.guard_torso, self.joints["neck"], joints["neck"]))
         order = ("foot", "knee", "hand", "elbow")
         pieces = sorted(self.pieces, key=lambda p: (6 if p.name == "head" else
                         3 if p.name == "body" else order.index(p.name.split("_")[1]) +
@@ -433,7 +499,8 @@ class Rig:
             factor = (tip - target) / (end - start)
             if abs(factor) < 0.24:
                 factor = 0.24
-            frame.alpha_composite(self.transform(piece.image, start, target, factor, axis=end - start))
+            image = self.guard_arm.get(piece.name, piece.image) if action == GUARD_WALK_FRONT else piece.image
+            frame.alpha_composite(self.transform(image, start, target, factor, axis=end - start))
         if front:
             frame.alpha_composite(gear)
             if grip_patch is not None:
@@ -446,7 +513,6 @@ class Rig:
                 close_joint_seam(frame, self.offset + ankle * self.scale, radius=15, gap=3)
         if action == "cast" and row["cast"] > 0.7:
             self.cast_sparks(frame, joints["left_hand"], row["cast"], index)
-        center = (self.gear_center - grip) * complex(math.cos(turn), math.sin(turn))
         emitter = self.offset + (joints[self.grip] + complex(center.real, center.imag * math.cos(pitch))) * self.scale
         return frame, emitter
 
@@ -561,9 +627,32 @@ def motion_rows(action, definition):
     return rows
 
 
+def load_rig(actor, direction, source, donor):
+    marks = RIGS["rigs"][actor][direction]
+    image = Image.open(source / actor / f"{direction}.png").convert("RGBA")
+    if image.size != (CELL, CELL) or not image.getbbox():
+        raise ValueError(f"Invalid {actor} {direction} rotation")
+    if marks.get("restore_left_arm"):
+        if actor != RIGS["left_arm_patch"]["actor"] or donor is None:
+            raise ValueError(f"No matching left arm plate for {actor} {direction}")
+        image = recover_left_arm(image, marks, donor)
+    image = clean_pixel_art(image, keep_magic=actor == "ranged")
+    return Rig(actor, direction, image, marks, load_underpaint(actor, direction, source))
+
+
 def build(actors, directions, source=SOURCE, destination=ASSETS):
     if len(directions) != len(set(directions)) or any(actor not in RIGS["rigs"] for actor in actors):
         raise ValueError("Unknown actor or repeated direction")
+    shield_sources = [GUARD_SHIELD["face_direction"], GUARD_SHIELD["edge_direction"]]
+    shield_size = GUARD_SHIELD["size_px"]
+    guard_base = GUARD_SHIELD["base_action"]
+    if (guard_base not in MOTION["gaits"] or guard_base not in MOTION["clips"]
+            or MOTION["clips"][guard_base]["actors"] != ["hero"]
+            or any(direction not in DIRECTIONS for direction in shield_sources)
+            or len(shield_size) != 2 or any(type(size) is not int or not 0 < size < CELL for size in shield_size)
+            or not 0 < GUARD_SHIELD["chest_ratio"] < 1
+            or any(not 0 < GUARD_SHIELD[key] < CELL for key in ("depth_scale", "left_bias_px"))):
+        raise ValueError("Invalid walking shield rig")
     for actor in actors:
         for direction in directions:
             marks = RIGS["rigs"][actor][direction]
@@ -587,27 +676,23 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
     destination.mkdir(parents=True, exist_ok=True)
     atlas = {"cell_px": CELL, "fps": MOTION["fps"], "origin_px": RIGS["origin_px"],
              "body_height_px": RIGS["body_height_px"], "directions": directions, "clips": []}
+    clips = MOTION["clips"] | {GUARD_WALK_FRONT: MOTION["clips"][guard_base]} | RIGS["extra_clips"]
     for actor in actors:
-        rigs = []
-        for direction in directions:
-            marks = RIGS["rigs"][actor][direction]
-            image = Image.open(source / actor / f"{direction}.png").convert("RGBA")
-            if image.size != (CELL, CELL) or not image.getbbox():
-                raise ValueError(f"Invalid {actor} {direction} rotation")
-            if marks.get("restore_left_arm"):
-                if actor != donor_actor or donor is None:
-                    raise ValueError(f"No matching left arm plate for {actor} {direction}")
-                image = recover_left_arm(image, marks, donor)
-            image = clean_pixel_art(image, keep_magic=actor == "ranged")
-            rigs.append(Rig(actor, direction, image, marks, load_underpaint(actor, direction, source)))
-        for action, definition in (MOTION["clips"] | RIGS["extra_clips"]).items():
+        required = list(dict.fromkeys([*directions, *shield_sources])) if actor == "hero" else directions
+        rigs = {direction: load_rig(actor, direction, source, donor) for direction in required}
+        if actor == "hero":
+            plates = guard_shield_plates(*(rigs[direction].gear for direction in shield_sources))
+            for rig in rigs.values():
+                rig.set_guard_shield(plates)
+        for action, definition in clips.items():
             if actor not in definition["actors"]:
                 continue
-            motion = motion_rows(action, definition)
+            motion = motion_rows(guard_base if action == GUARD_WALK_FRONT else action, definition)
             name = f"{actor}-{action}"
             sheet = Image.new("RGBA", (len(motion) * CELL, len(directions) * CELL))
             emitters = []
-            for y, rig in enumerate(rigs):
+            for y, direction in enumerate(directions):
+                rig = rigs[direction]
                 centers = []
                 for x, row in enumerate(motion):
                     frame, emitter = rig.draw(action, x, row)
@@ -618,7 +703,7 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
                         raise ValueError(f"Empty {name} {directions[y]} frame {x}")
                     if bbox and (min(bbox[:2]) <= 0 or max(bbox[2:]) >= CELL):
                         raise ValueError(f"Clipped {name} {directions[y]} frame {x}")
-                    if actor == "hero" and action in {"run", "guard_walk"}:
+                    if actor == "hero" and action in {"run", "guard_walk", GUARD_WALK_FRONT}:
                         regions = sorted(map(len, pixel_regions(np.asarray(frame.getchannel("A")) > 0)),
                                          reverse=True)
                         if len(regions) > 1 and regions[1] >= 36:

@@ -105,11 +105,18 @@ class PlayerCombat:
         if self.state == 'beam' and not self.beam.active:
             self.state = 'free'
 
+    def walking_guard(self):
+        return self.state == 'guard' and self.owner.moving
+
+    def guard_arc(self):
+        setting = 'guard_walk_angle_deg' if self.walking_guard() else 'guard_angle_deg'
+        return radians(self.settings[setting])
+
     def front(self, source):
         direction = getattr(source, 'incoming_angle',
                             atan2(source.y - self.owner.y, source.x - self.owner.x))
         delta = direction - self.aim
-        return cos(delta) >= cos(radians(self.settings['guard_angle_deg']) / 2) - 1e-9
+        return cos(delta) >= cos(self.guard_arc() / 2) - 1e-9
 
     def push_parried_enemies(self):
         left, bottom, right, top = self.owner.get_bb()
@@ -166,8 +173,9 @@ class PlayerCombat:
             color = (101, 185, 248) if self.state == 'guard' else (239, 166, 76)
             if self.state == 'raising' and self.time - self.started < self.window:
                 color = (111, 255, 169)
-            draw_sector(self.owner.x, self.owner.y, self.aim, 1.5,
-                        radians(self.settings['guard_angle_deg']), self.owner.camera, color)
+            radius = self.owner.height * .65 if self.walking_guard() else 1.5
+            draw_sector(self.owner.x, self.owner.y, self.aim, radius,
+                        self.guard_arc(), self.owner.camera, color)
         if self.time < self.success_invuln_until:
             draw_sector(self.owner.x, self.owner.y, 0, 1.2, 2 * pi,
                         self.owner.camera, (168, 249, 187))

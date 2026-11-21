@@ -20,6 +20,7 @@ class Player:
         self.targets = []
         self.projectiles = []
         self.sprites = self.effects = None
+        self.moving = False
         self.visual_motion, self.visual_time = 'idle', 0.0
         self.visual_angle = -pi / 2
         self.combat = PlayerCombat(self)
@@ -81,7 +82,7 @@ class Player:
             self.x, self.y = self.constrain_position(
                 self.x + dx / length * distance,
                 self.y + dy / length * distance)
-        moved = hypot(self.x - before[0], self.y - before[1]) > 1e-9
+        self.moving = hypot(self.x - before[0], self.y - before[1]) > 1e-9
         state = self.combat.state
         if state == 'guard' or self.combat.position_lock_remaining() > 1e-9:
             self.visual_angle = self.combat.aim
@@ -89,7 +90,7 @@ class Player:
             self.visual_angle = self.combat.beam.angle
         elif length and state != 'dead':
             self.visual_angle = atan2(dy, dx)
-        motion = ('guard_walk' if moved else 'guard') if state == 'guard' else ('run' if moved else 'idle')
+        motion = ('guard_walk' if self.moving else 'guard') if state == 'guard' else ('run' if self.moving else 'idle')
         self.visual_time = self.visual_time + dt if self.visual_motion == motion else 0.0
         self.visual_motion = motion
         self.combat.update_beam(dt)
@@ -103,7 +104,7 @@ class Player:
         if self.combat.position_lock_remaining() > 1e-9:
             motion, angle, frame = 'parry', self.combat.aim, self.combat.parry_frame()
         elif self.combat.state == 'guard':
-            motion = 'guard_walk' if motion == 'guard_walk' else 'guard'
+            motion = 'guard_walk_front' if self.combat.walking_guard() else 'guard'
             angle = self.combat.aim
         elif self.combat.state == 'beam':
             angle = self.combat.beam.angle

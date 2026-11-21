@@ -96,7 +96,7 @@ def validate_presentation(data):
                 raise ValueError(f'{field}: 양의 유한 수가 필요합니다')
     assets = next(row for row in rows if row['id'] == 'sprites')
     atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))
-    expected = {'hero': {'idle','guard_walk','guard','run','parry'},
+    expected = {'hero': {'idle','guard_walk','guard_walk_front','guard','run','parry'},
                 'melee': {'idle','walk','chop','deflected','collapse'},
                 'ranged': {'idle','walk','cast','stagger','ash'}}
     if atlas['directions'] != ['S','SE','E','NE','N','NW','W','SW'] or atlas['fps'] <= 0:
@@ -202,7 +202,8 @@ def validate_combat(data, scale):
     from math import isfinite
     schemas = {
         'systems': {'id', 'player_hp', 'guard_kmph', 'input_lock_s', 'parry_move_lock_s',
-                    'success_invuln_s', 'hit_invuln_s', 'stun_s', 'guard_angle_deg', 'parry_push_range_m', 'energy_max',
+                    'success_invuln_s', 'hit_invuln_s', 'stun_s', 'guard_angle_deg',
+                    'guard_walk_angle_deg', 'parry_push_range_m', 'energy_max',
                     'damage_multiplier', 'beam_duration_s', 'beam_tick_s', 'step_s'},
         'stages': {'id', 'energy_min', 'parry_window_s', 'beam_width_m'},
         'enemies': {'id', 'character_id', 'hp', 'speed_kmph', 'damage', 'energy_gain',
@@ -242,7 +243,8 @@ def validate_combat(data, scale):
         raise ValueError('패링 구간, 위치 고정, 입력 잠금 순서가 잘못되었습니다.')
     if any(a['parry_window_s'] <= b['parry_window_s'] for a, b in zip(stages, stages[1:])):
         raise ValueError('축적 단계가 높을수록 패링 구간은 짧아야 합니다.')
-    if not 0 < system['guard_angle_deg'] <= 360 or system['step_s'] > 1 / 60:
+    if (not 0 < system['guard_angle_deg'] <= system['guard_walk_angle_deg'] <= 360
+            or system['step_s'] > 1 / 60):
         raise ValueError('방어 각도 또는 전투 갱신 간격이 잘못되었습니다.')
     if system['beam_duration_s'] <= system['beam_tick_s'] * 2:
         raise ValueError('광선 지속 시간이 세 번째 타격 전에 끝납니다.')
