@@ -66,12 +66,22 @@ class CombatTests(unittest.TestCase):
         for count in range(1, 6):
             self.assertEqual(combat.receive(count, enemy, 10, 10), 'parry')
             self.assertEqual(combat.energy, min(count * 10, 40))
-        for energy, name, window in ((0, 'stage1', .3), (9, 'stage1', .3),
-                                    (10, 'stage2', .22), (20, 'stage3', .15),
-                                    (30, 'stage4', .1), (40, 'stage4', .1)):
+        for energy, name, window in ((0, 'stage1', .34), (9, 'stage1', .34),
+                                    (10, 'stage2', .26), (20, 'stage3', .18),
+                                    (30, 'stage4', .13), (40, 'stage4', .13)):
             combat.energy = energy
             self.assertEqual(combat.stage()['id'], name)
             self.assertEqual(combat.stage()['parry_window_s'], window)
+
+    def test_parry_saves_early_attempts_at_each_energy_stage(self):
+        for energy, elapsed in ((0, .32), (10, .24), (20, .165), (30, .115)):
+            with self.subTest(energy=energy):
+                player, enemy = actor()
+                combat = player.combat
+                combat.energy = energy
+                combat.right_down()
+                combat.advance(elapsed)
+                self.assertEqual(combat.receive('early', enemy, 10, 10), 'parry')
 
     def test_input_lock_guard_release_and_no_queue(self):
         player, _ = actor()
@@ -157,14 +167,14 @@ class CombatTests(unittest.TestCase):
         combat = player.combat
         combat.right_down()
         combat.receive(1, enemy, 10, 10)
-        self.assertEqual(combat.window, .3)
+        self.assertEqual(combat.window, .34)
         advance(player, [], .25)
         self.assertEqual(combat.receive(2, enemy, 10, 10), 'parry')
         combat.right_up()
         advance(player, [], .8)
         combat.right_down()
-        self.assertEqual(combat.window, .15)
-        advance(player, [], .16)
+        self.assertEqual(combat.window, .18)
+        advance(player, [], .19)
         self.assertEqual(combat.receive(3, enemy, 10, 10), 'hit')
         self.assertEqual(combat.receive(4, enemy, 10, 10), 'invulnerable')
         self.assertEqual(combat.energy, 20)
