@@ -6,11 +6,12 @@ import pico2d
 
 from enemy_spacing import is_free
 from projectile import Projectile
-from wave_data import RANGED
+from wave_data import GATES, RANGED
 
 
 class PatchRound:
-    checks = ('arena-loads', 'parry-moves-enemy', 'beam-three-pulses', 'ranged-fires',
+    checks = ('gates-open-and-enemies-cross', 'arena-loads', 'parry-moves-enemy',
+              'beam-three-pulses', 'ranged-fires',
               'player-hit-flashes', 'enemies-stay-apart', 'walking-guard-blocks-side')
 
     def __init__(self, mode, report):
@@ -24,9 +25,8 @@ class PatchRound:
         self.beam = None
         self.hit_colors = []
         self.side_shot = None
-        self.mode.waves.load(4)
-        self.mode.player.y = 23.0
-        self.mode.player.pressed_keys.add(pico2d.SDLK_w)
+        self.saw_partial_entry = False
+        self.gates_started_closed = all(mode.waves.gate_opening(gate) == 0 for gate in GATES)
 
     def write(self, result, detail=''):
         with self.report.open('a', encoding='utf-8') as report:
@@ -48,16 +48,30 @@ class PatchRound:
         player = self.mode.player
         combat = player.combat
         if self.age > 8:
-            self.write('fail', ': expected combat result did not occur')
+            self.write('fail', ': expected scene result did not occur')
             self.index = len(self.checks)
-        elif self.index == 0 and self.age >= 1.15:
-            if len(self.mode.arena.art) == 2 and player.y > 26 and player.visual_motion == 'run':
+        elif self.index == 0:
+            waves = self.mode.waves
+            shown = [entry for entry in waves.queue if entry.visible > 0]
+            if any(waves.gate_opening(entry.gate['id']) < 1 for entry in shown):
+                self.write('fail', ': an enemy appeared in front of a closed gate')
+                self.index = len(self.checks)
+                return
+            self.saw_partial_entry |= any(0 < entry.visible < 1 for entry in shown)
+            if (not waves.pending and self.saw_partial_entry and self.gates_started_closed
+                    and [gate for _, gate, _ in waves.spawn_log] == list(GATES) * 2):
+                waves.load(4)
+                player.y = 23.0
+                player.pressed_keys.add(pico2d.SDLK_w)
+                self.write('pass')
+        elif self.index == 1 and self.age >= 1.15:
+            if len(self.mode.arena.art) == 3 and player.y > 26 and player.visual_motion == 'run':
                 player.pressed_keys.clear()
                 self.spawn('melee', 0)
                 self.enemy.x += self.enemy.attack_distance(0) + .8
                 combat.aim = 0
                 self.write('pass')
-        elif self.index == 1:
+        elif self.index == 2:
             if not self.triggered and self.enemy.state == 'windup' and self.enemy.age >= .48:
                 self.triggered = True
                 self.target_x = self.enemy.x
@@ -65,7 +79,7 @@ class PatchRound:
             if self.enemy.state == 'stunned' and self.enemy.get_bb()[0] > self.target_x - self.enemy.width / 2 + .5:
                 combat.right_up()
                 self.write('pass')
-        elif self.index == 2:
+        elif self.index == 3:
             if not self.beam and combat.state == 'free' and self.age > .25:
                 combat.energy = 40
                 combat.fire()
@@ -74,10 +88,10 @@ class PatchRound:
                 if all(self.enemy.identifier in ids for ids in self.beam.hit_ids) and player.effects.sound:
                     self.spawn('ranged', 14)
                     self.write('pass')
-        elif self.index == 3:
+        elif self.index == 4:
             if self.enemy.shots > 0 and self.enemy.x - player.x >= 13.9:
                 self.write('pass')
-        elif self.index == 4:
+        elif self.index == 5:
             color = player.effects.player_flash_color()
             if color is not None and (not self.hit_colors or color != self.hit_colors[-1]):
                 self.hit_colors.append(color)
@@ -85,7 +99,7 @@ class PatchRound:
                     and self.hit_colors == ['red', 'white', 'red']):
                 self.mode.waves.load(3, 'all')
                 self.write('pass')
-        elif self.index == 5:
+        elif self.index == 6:
             enemies = self.mode.enemies
             if any(not is_free(enemy, enemy.x, enemy.y) for enemy in enemies):
                 self.write('fail', ': enemies moved inside the spacing gap')
@@ -95,7 +109,7 @@ class PatchRound:
                 combat.right_down()
                 player.pressed_keys.add(pico2d.SDLK_d)
                 self.write('pass')
-        elif self.index == 6:
+        elif self.index == 7:
             if self.side_shot is None and combat.walking_guard():
                 self.side_shot = Projectile('guard-side', player.x + 4, player.y, pi, RANGED['ranged'], player)
                 self.mode.waves.add_projectile(self.side_shot)
