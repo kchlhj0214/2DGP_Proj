@@ -4,7 +4,7 @@ from math import atan2, cos, hypot, pi, radians
 
 from beam import Beam
 from combat_data import STAGES, SYSTEMS
-from geometry import draw_sector
+from geometry import draw_sector, sector_points
 from presentation_data import VISUALS
 
 
@@ -121,6 +121,16 @@ class PlayerCombat:
         delta = direction - self.aim
         return cos(delta) >= cos(self.guard_arc() / 2) - 1e-9
 
+    def can_parry(self, source):
+        return (self.hp > 0 and self.time >= self.hit_invuln_until - 1e-9
+                and self.parry_active() and self.front(source))
+
+    def parry_area(self, source):
+        if not self.can_parry(source):
+            return ()
+        return sector_points(self.owner.x, self.owner.y, self.aim,
+                             self.settings['parry_radius_m'], self.guard_arc())
+
     def push_parried_enemies(self):
         left, bottom, right, top = self.owner.get_bb()
         reach = self.settings['parry_push_range_m']
@@ -133,25 +143,31 @@ class PlayerCombat:
             if hypot(dx, dy) <= reach + 1e-9:
                 enemy.start_parry_recoil()
 
+    def try_parry(self, attack_id, source, energy_gain):
+        if attack_id in self.resolved or not self.can_parry(source):
+            return False
+        self.resolved.add(attack_id)
+        self.energy = min(self.settings['energy_max'], self.energy + energy_gain)
+        if not self.success:
+            self.success_invuln_until = self.time + self.settings['success_invuln_s']
+            self.parry_hit_at = self.time - self.started
+            self.push_parried_enemies()
+        self.success = True
+        if not self.stunned_one and getattr(source, 'can_be_stunned', True):
+            source.stun(self.settings['stun_s'])
+            self.stunned_one = True
+        self.feedback('parry')
+        return True
+
     def receive(self, attack_id, source, damage, energy_gain):
         if self.hp <= 0 or attack_id in self.resolved:
             return 'ignored'
+        if self.try_parry(attack_id, source, energy_gain):
+            return 'parry'
         self.resolved.add(attack_id)
         # 일반 피격 보호 중에는 새 패링으로 축적하지 않는다.
         if self.time < self.hit_invuln_until - 1e-9:
             return 'invulnerable'
-        if self.parry_active() and self.front(source):
-            self.energy = min(self.settings['energy_max'], self.energy + energy_gain)
-            if not self.success:
-                self.success_invuln_until = self.time + self.settings['success_invuln_s']
-                self.parry_hit_at = self.time - self.started
-                self.push_parried_enemies()
-            self.success = True
-            if not self.stunned_one and getattr(source, 'can_be_stunned', True):
-                source.stun(self.settings['stun_s'])
-                self.stunned_one = True
-            self.feedback('parry')
-            return 'parry'
         if self.time < self.success_invuln_until - 1e-9:
             return 'invulnerable'
         if self.state == 'guard' and self.front(source):
@@ -176,7 +192,7 @@ class PlayerCombat:
             if self.parry_active():
                 color = (111, 255, 169)
             if raising:
-                radius = self.owner.height * VISUALS['parry']['indicator_height_ratio']
+                radius = self.settings['parry_radius_m']
             else:
                 radius = self.owner.height * .65 if self.walking_guard() else 1.5
             draw_sector(self.owner.x, self.owner.y, self.aim, radius,

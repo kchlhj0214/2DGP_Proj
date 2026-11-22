@@ -24,15 +24,19 @@ class Projectile:
         distance = self.data['projectile_speed_mps'] * game_framework.frame_time
         self.x += cos(self.angle) * distance
         self.y += sin(self.angle) * distance
-        beam = self.player.combat.beam
+        combat = self.player.combat
+        beam = combat.beam
         if beam and beam.active and circle_intersects_polygon(self.x, self.y, self.radius, beam.polygon()):
-            self.active, self.result = False, 'beam'
+            self.result = 'beam'
         elif circle_intersects_polygon(self.x, self.y, self.radius, box_points(self.player.get_bb())):
-            self.result = self.player.combat.receive(
-                self.identifier, self, self.data['damage'], self.data['energy_gain'])
-            self.active = False
+            self.result = combat.receive(self.identifier, self, self.data['damage'], self.data['energy_gain'])
+        elif ((area := combat.parry_area(self))
+              and circle_intersects_polygon(self.x, self.y, self.radius, area)
+              and combat.try_parry(self.identifier, self, self.data['energy_gain'])):
+            self.result = 'parry'
         elif hypot(self.x, self.y) >= self.player.arena.radius:
-            self.active, self.result = False, 'boundary'
+            self.result = 'boundary'
+        self.active = self.result is None
 
     def draw(self):
         if self.active and self.player.sprites:

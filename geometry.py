@@ -57,12 +57,16 @@ def draw_polygon(points, camera, color):
         pico2d.draw_line(*camera.to_screen(*start), *camera.to_screen(*end), *color)
 
 
-def draw_sector(x, y, angle, radius, spread, camera, color):
+def sector_points(x, y, angle, radius, spread):
     points = [(x, y)]
     for i in range(25):
         a = angle - spread / 2 + spread * i / 24
         points.append((x + cos(a) * radius, y + sin(a) * radius))
-    draw_polygon(points, camera, color)
+    return points
+
+
+def draw_sector(x, y, angle, radius, spread, camera, color):
+    draw_polygon(sector_points(x, y, angle, radius, spread), camera, color)
 
 
 def warning_strength(age, windup):

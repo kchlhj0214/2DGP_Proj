@@ -102,9 +102,15 @@ class MeleeEnemy:
         return contact + self.data['attack_gap_m']
 
     def resolve_sword(self):
-        if not self.hit and intersects(self.sword_polygon(), box_points(self.player.get_bb())):
+        if self.hit:
+            return
+        sword = self.sword_polygon()
+        combat = self.player.combat
+        if intersects(sword, box_points(self.player.get_bb())):
             self.hit = True
-            self.player.combat.receive(self.attack_id, self, self.data['damage'], self.data['energy_gain'])
+            combat.receive(self.attack_id, self, self.data['damage'], self.data['energy_gain'])
+        elif (area := combat.parry_area(self)) and intersects(sword, area):
+            self.hit = combat.try_parry(self.attack_id, self, self.data['energy_gain'])
 
     def update(self):
         if self.hp <= 0:

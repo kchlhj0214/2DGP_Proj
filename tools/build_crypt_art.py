@@ -1,7 +1,7 @@
 """Bake the crypt floor, bridges and portcullis layers for the pico2d scene."""
 
 import json
-from math import cos, pi, sin
+from math import ceil, cos, pi, sin
 from pathlib import Path
 from random import Random
 
@@ -17,7 +17,8 @@ def read(name):
 
 ART = next(row for row in read('presentation')['visuals'] if row['id'] == 'arena')
 WORLD = read('scale')
-ENTRY = read('waves')['settings'][0]
+WAVES = read('waves')
+ENTRY = WAVES['settings'][0]
 RADIUS = ART['ring_radius_px']
 UNIT = RADIUS / (WORLD['viewports'][0]['height_m'] * WORLD['arenas'][0]['diameter_height_ratio'] / 2)
 PITCH = ART['floor_y_ratio']
@@ -183,9 +184,7 @@ def bridges(draw, rng):
         slab(PORTAL+7, PORTAL+38, -BRIDGE-3, BRIDGE+3, (26, 30, 40), 1)
 
 
-def gate_images():
-    h = round(ART['gate_height_m'] * UNIT)
-    width = 2 * BRIDGE + 6
+def gate_ironwork(width, h):
     bars = Image.new('RGBA', pixels(width, h))
     iron = PixelDraw(bars)
     for x in range(4, width, 9):
@@ -197,31 +196,95 @@ def gate_images():
         iron.line((3, y+1, width-4, y+1), fill=(104,109,119))
         for x in range(4, width, 9):
             iron.point((x, y+3), fill=(156,150,135))
+    return bars
+
+
+def gate_frame(width, h, rear=False):
     fw, fh = width+32, h+28
     frame = Image.new('RGBA', pixels(fw, fh))
     stone = PixelDraw(frame)
-    stone.polygon([(1,fh-1),(1,24),(10,9),(23,2),(fw-24,2),(fw-11,9),(fw-2,24),(fw-2,fh-1),
-                   (fw-17,fh-1),(fw-17,32),(fw-25,21),(24,21),(16,32),(16,fh-1)],
-                  fill=(49,57,71), outline=(26,31,43))
+    outline = [(1,fh-1),(1,24),(10,9),(23,2),(fw-24,2),(fw-11,9),(fw-2,24),(fw-2,fh-1),
+               (fw-17,fh-1),(fw-17,32),(fw-25,21),(24,21),(16,32),(16,fh-1)]
+    stone.polygon(outline, fill=(49,57,71), outline=(26,31,43))
+    brick = [shade(color, -9) for color in BRICK] if rear else BRICK
     for left, right in ((3,15),(fw-16, fw-4)):
         for y in range(26, fh-2, 8):
-            stone.rectangle((left,y,right,min(y+6,fh-2)), fill=BRICK[(y//8) % len(BRICK)])
-            stone.line((left,y,right-1,y), fill=(122,128,138))
-        x = (left + right)//2
-        stone.polygon([(x-4,38),(x+4,38),(x+3,44),(x-3,44)], fill=(161,141,110))
-        stone.polygon([(x-3,36),(x-5,30),(x-1,32),(x+2,23),(x+5,34),(x+3,37)],
-                      fill=(86,191,178))
-        stone.line((x,35,x+2,29), fill=(185,236,207), width=2)
+            stone.rectangle((left,y,right,min(y+6,fh-2)), fill=brick[(y//8) % len(brick)])
+            stone.line((left,y,right-1,y), fill=shade(brick[3], 30))
+        if not rear:
+            x = (left + right)//2
+            stone.polygon([(x-4,38),(x+4,38),(x+3,44),(x-3,44)], fill=(161,141,110))
+            stone.polygon([(x-3,36),(x-5,30),(x-1,32),(x+2,23),(x+5,34),(x+3,37)],
+                          fill=(86,191,178))
+            stone.line((x,35,x+2,29), fill=(185,236,207), width=2)
     for x in range(17, fw-17, 10):
-        stone.rectangle((x, 6, min(x+8, fw-18), 20), fill=BRICK[(x//10) % len(BRICK)])
-        stone.line((x, 6, min(x+8, fw-18), 6), fill=(127,134,142))
-    mid = fw//2
-    stone.polygon([(mid-6,8),(mid+6,8),(mid+5,17),(mid+2,20),(mid-2,20),(mid-5,17)],
-                  fill=(176,172,149))
-    stone.rectangle((mid-4,12,mid-2,14), fill=JOINT)
-    stone.rectangle((mid+2,12,mid+4,14), fill=JOINT)
-    frame.save(ROOT / ART['gate_frame'], optimize=True)
-    bars.save(ROOT / ART['gate_bars'], optimize=True)
+        stone.rectangle((x, 6, min(x+8, fw-18), 20), fill=brick[(x//10) % len(brick)])
+        stone.line((x, 6, min(x+8, fw-18), 6), fill=shade(brick[3], 38))
+    if rear:
+        stone.line((17, 20, fw-18, 20), fill=(111, 116, 124), width=2)
+    else:
+        mid = fw//2
+        stone.polygon([(mid-6,8),(mid+6,8),(mid+5,17),(mid+2,20),(mid-2,20),(mid-5,17)],
+                      fill=(176,172,149))
+        stone.rectangle((mid-4,12,mid-2,14), fill=JOINT)
+        stone.rectangle((mid+2,12,mid+4,14), fill=JOINT)
+    return frame, [pixels(*point) for point in outline]
+
+
+def gate_view(cell, frame, outline, view):
+    # Face width, projected floor slope across the threshold, and the depth away from the arena.
+    squeeze, slope, depth_x, depth_y = view
+    depth_x, depth_y = pixels(depth_x, depth_y)
+    cx, cy = cell[0] / 2, cell[1] - ART['gate_anchor_from_bottom_px']
+
+    def project_face(point):
+        x, y = point
+        horizontal = x - frame.width / 2
+        return round(cx + horizontal * squeeze), round(cy + y - frame.height + horizontal * slope)
+
+    structure = Image.new('RGBA', cell)
+    if depth_x or depth_y:
+        stone = ImageDraw.Draw(structure)
+        corners = [project_face(point) for point in outline]
+        for first, second in zip(corners, corners[1:] + corners[:1]):
+            x, y = first
+            u, v = second
+            color = (95, 101, 113) if abs(u - x) > abs(v - y) else (45, 53, 67)
+            stone.polygon((first, second, (u + depth_x, v + depth_y), (x + depth_x, y + depth_y)),
+                          fill=color, outline=(33, 42, 51))
+    inverse = (1 / squeeze, 0, frame.width / 2 - cx / squeeze,
+               -slope / squeeze, 1, frame.height - cy + slope * cx / squeeze)
+    return structure, inverse
+
+
+def gate_images():
+    height = round(ART['gate_height_m'] * UNIT)
+    width = 2 * BRIDGE + 6
+    bars = gate_ironwork(width, height)
+    columns, frames = ART['gate_atlas_cols'], ART['gate_lift_frames']
+    cell = pixels(120, 162)
+    rows = ceil(len(WAVES['gates']) * frames / columns)
+    atlas = Image.new('RGBA', (cell[0] * columns, cell[1] * rows))
+    views = {'north': (1, 0, 0, 0), 'east': (.43, .62, 18, -3),
+             'south': (1, 0, 0, -10), 'west': (.43, -.62, -18, -3)}
+    for side, gate in enumerate(WAVES['gates']):
+        direction = gate['id']
+        frame, outline = gate_frame(width, height, rear=direction == 'south')
+        structure, inverse = gate_view(cell, frame, outline, views[direction])
+        for phase in range(frames):
+            face = Image.new('RGBA', frame.size)
+            lift = round(bars.height * phase / (frames - 1))
+            if lift < bars.height:
+                # Cut off the ironwork as it rises behind the lintel, then turn the whole arch.
+                remaining = bars.crop((0, lift, bars.width, bars.height))
+                face.alpha_composite(remaining, ((frame.width - bars.width) // 2,
+                                                  frame.height - bars.height))
+            face.alpha_composite(frame)
+            view = structure.copy()
+            view.alpha_composite(face.transform(cell, Image.Transform.AFFINE, inverse))
+            row, column = divmod(side * frames + phase, columns)
+            atlas.paste(view, (column * cell[0], row * cell[1]))
+    atlas.save(ROOT / ART['gate_atlas'], optimize=True)
 
 
 def build():

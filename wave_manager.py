@@ -201,3 +201,4 @@ class WaveManager:
         self.player.arena.draw_gates(self)
         for entry in sorted(self.queue, key=lambda item: item.enemy.y, reverse=True):
             entry.draw()
+        self.player.arena.draw_gates(self, foreground=True)

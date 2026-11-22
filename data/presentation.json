@@ -4,8 +4,9 @@
       "id": "arena", "art": "assets/arena-colosseum.png",
       "water": "assets/arena-water.png", "ring_radius_px": 415, "bank_drop_px": 10,
       "bridge_width_m": 5.0, "floor_y_ratio": 0.84,
-      "crypt_art": "assets/crypt/arena.png", "gate_frame": "assets/crypt/gate-frame.png",
-      "gate_bars": "assets/crypt/gate-bars.png", "crypt_radius_px": 1126, "gate_height_m": 4.8,
+      "crypt_art": "assets/crypt/arena.png", "gate_atlas": "assets/crypt/gate-atlas.png",
+      "gate_atlas_cols": 8, "gate_lift_frames": 17, "gate_anchor_from_bottom_px": 100,
+      "crypt_radius_px": 1126, "gate_height_m": 4.8,
       "overview_return_s": 0.8,
       "wall_base_px": [
         471, 469, 470, 467, 463, 459, 455, 452, 451, 450, 450, 450, 450, 449, 442, 453,
@@ -16,7 +17,7 @@
     },
     {"id": "sprites", "atlas": "assets/pixellab-sprites/atlas.json", "asset_dir": "assets/pixellab-sprites", "body_height_px": 158, "projectile_art": "assets/sprites/arcane-orb.png"},
     {"id": "impact", "sound": "assets/audio/beam-pulse.wav", "volume": 60, "hitstop_s": 0.055, "flash_s": 0.115, "player_flash_phase_s": 0.075, "number_s": 0.65, "rise_m": 1.15, "shake_s": 0.28, "shake_m": 0.22, "max_shake_m": 0.32},
-    {"id": "parry", "indicator_height_ratio": 0.8, "push_height_ratio": 0.34444444444444444, "push_s": 0.75, "raise_s": 0.11, "return_s": 0.16, "success_hold_s": 0.055},
+    {"id": "parry", "push_height_ratio": 0.34444444444444444, "push_s": 0.75, "raise_s": 0.11, "return_s": 0.16, "success_hold_s": 0.055},
     {"id": "beam", "taper_width_ratio": 0.38}
   ]
 }

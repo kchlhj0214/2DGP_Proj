@@ -1,6 +1,6 @@
 """원형 경기장. 전달받은 경계 판정용 직사각형을 원 내부로 제한한다."""
 
-from math import hypot, sqrt
+from math import ceil, hypot, sqrt
 from pathlib import Path
 
 import pico2d
@@ -16,11 +16,18 @@ class Arena:
         self.radius = viewport['height_m'] * data['diameter_height_ratio'] / 2
         self.camera = camera
         self.art = ()
+        self.gate_cell = ()
 
     def load_art(self):
         root = Path(__file__).resolve().parent
         self.art = tuple(pico2d.load_image(str(root / ART[name]))
-                         for name in ('crypt_art', 'gate_frame', 'gate_bars'))
+                         for name in ('crypt_art', 'gate_atlas'))
+        atlas = self.art[1]
+        columns = ART['gate_atlas_cols']
+        rows = ceil(len(GATES) * ART['gate_lift_frames'] / columns)
+        if atlas.w % columns or atlas.h % rows or atlas.h // rows <= ART['gate_anchor_from_bottom_px']:
+            raise ValueError('철창 이미지 시트 크기가 다릅니다.')
+        self.gate_cell = atlas.w // columns, atlas.h // rows
 
     def update(self):
         pass
@@ -56,21 +63,22 @@ class Arena:
         image = self.art[0]
         image.clip_draw(0, 0, image.w, image.h, center_x, center_y, image.w * scale, image.h * scale)
 
-    def draw_gates(self, waves):
+    def draw_gates(self, waves, foreground=False):
         if not self.art:
             return
-        _, frame, bars = self.art
+        atlas = self.art[1]
+        width, height = self.gate_cell
         scale = self.radius * self.camera.pixels_per_meter / ART['crypt_radius_px']
-        for gate_id, gate in GATES.items():
+        columns, frames = ART['gate_atlas_cols'], ART['gate_lift_frames']
+        center_height = (height / 2 - ART['gate_anchor_from_bottom_px']) * scale
+        for direction, (gate_id, gate) in enumerate(GATES.items()):
+            # At the south gate the camera sees the rear, with the walk path behind the arch.
+            if (gate_id == 'south') != foreground:
+                continue
             x, y = self.camera.to_screen(gate['x_ratio'] * waves.portal_distance,
                                          gate['y_ratio'] * waves.portal_distance)
-            side = gate['x_ratio'] != 0
-            width = scale * (0.78 if side else 1)
-            # The top of the ironwork slides behind the lintel without scaling the bars.
-            lift = round(bars.h * waves.gate_opening(gate_id))
-            remaining = bars.h - lift
-            if remaining:
-                bars.clip_draw(0, 0, bars.w, remaining, x, y + (lift + remaining / 2) * scale,
-                               bars.w * width, remaining * scale)
-            frame.clip_draw(0, 0, frame.w, frame.h, x, y + frame.h * scale / 2,
-                            frame.w * width, frame.h * scale)
+            lift = round((frames - 1) * waves.gate_opening(gate_id))
+            row, column = divmod(direction * frames + lift, columns)
+            bottom = atlas.h - (row + 1) * height
+            atlas.clip_draw(column * width, bottom, width, height, x, y + center_height,
+                            width * scale, height * scale)

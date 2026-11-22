@@ -30,7 +30,7 @@ class PresentationTests(TestCase):
             player.combat.aim = pi / 2
             player.combat.right_down()
             player.combat.advance(.11)
-            radius = player.height * VISUALS['parry']['indicator_height_ratio']
+            radius = player.combat.settings['parry_radius_m']
             x, y = camera.to_screen(player.x, player.y + radius)
             x, y = round(x), round(camera.height_px - 1 - y)
 

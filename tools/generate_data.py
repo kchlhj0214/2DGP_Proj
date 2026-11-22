@@ -71,16 +71,17 @@ def generate():
 def validate_presentation(data):
     schemas = {
         'arena': {'art', 'water', 'ring_radius_px', 'wall_base_px', 'bank_drop_px', 'bridge_width_m',
-                  'floor_y_ratio', 'crypt_art', 'gate_frame', 'gate_bars', 'crypt_radius_px', 'gate_height_m',
+                  'floor_y_ratio', 'crypt_art', 'gate_atlas', 'gate_atlas_cols', 'gate_lift_frames',
+                  'gate_anchor_from_bottom_px', 'crypt_radius_px', 'gate_height_m',
                   'overview_return_s'},
         'sprites': {'atlas', 'asset_dir', 'body_height_px', 'projectile_art'},
         'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'player_flash_phase_s', 'number_s', 'rise_m',
                    'shake_s', 'shake_m', 'max_shake_m'},
-        'parry': {'indicator_height_ratio', 'push_height_ratio', 'push_s', 'raise_s', 'return_s', 'success_hold_s'},
+        'parry': {'push_height_ratio', 'push_s', 'raise_s', 'return_s', 'success_hold_s'},
         'beam': {'taper_width_ratio'},
     }
     paths = {'art', 'water', 'atlas', 'asset_dir', 'sound', 'projectile_art',
-             'crypt_art', 'gate_frame', 'gate_bars'}
+             'crypt_art', 'gate_atlas'}
     rows = data.get('visuals', [])
     if len(rows) != len(schemas) or {row.get('id') for row in rows} != set(schemas):
         raise ValueError('화면 연출 시트 누락')
@@ -99,6 +100,11 @@ def validate_presentation(data):
                 raise ValueError(f'{field}: 양의 유한 수가 필요합니다')
         if row['id'] == 'arena' and row['floor_y_ratio'] > 1:
             raise ValueError('경기장 바닥의 세로 투영은 가로를 넘을 수 없습니다.')
+        if row['id'] == 'arena':
+            columns, frames, anchor = (row[key] for key in ('gate_atlas_cols', 'gate_lift_frames',
+                                                            'gate_anchor_from_bottom_px'))
+            if any(type(value) is not int for value in (columns, frames, anchor)) or frames < 2:
+                raise ValueError('철창 이미지 시트의 칸 수와 기준점이 올바르지 않습니다.')
     assets = next(row for row in rows if row['id'] == 'sprites')
     atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))
     expected = {'hero': {'idle','guard_walk','guard_walk_front','guard','run','parry'},
@@ -217,7 +223,7 @@ def validate_combat(data, scale):
     schemas = {
         'systems': {'id', 'player_hp', 'guard_kmph', 'input_lock_s', 'parry_move_lock_s',
                     'success_invuln_s', 'hit_invuln_s', 'stun_s', 'guard_angle_deg',
-                    'guard_walk_angle_deg', 'parry_push_range_m', 'energy_max',
+                    'guard_walk_angle_deg', 'parry_radius_m', 'parry_push_range_m', 'energy_max',
                     'damage_multiplier', 'beam_duration_s', 'beam_tick_s', 'step_s'},
         'stages': {'id', 'energy_min', 'parry_window_s', 'beam_width_m'},
         'enemies': {'id', 'character_id', 'hp', 'speed_kmph', 'damage', 'energy_gain',

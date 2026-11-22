@@ -191,6 +191,29 @@ class WaveTests(unittest.TestCase):
 
 
 class RangedTests(unittest.TestCase):
+    def test_parry_intercepts_a_sword_and_bolt_beyond_the_body(self):
+        player, waves = controller()
+        player.combat.right_down()
+        enemy = MeleeEnemy('long-swing', ENEMIES['melee'], 8.1, 0, player)
+        enemy.angle = pi
+        enemy.age = enemy.data['swing_s'] / 2
+        enemy.attack_id = 'long-swing'
+        enemy.resolve_sword()
+        self.assertEqual(player.combat.energy, 0)
+
+        enemy.x = 7.8
+        enemy.resolve_sword()
+        self.assertEqual(player.combat.energy, 10)
+        self.assertEqual(enemy.state, 'stunned')
+
+        bolt = Projectile('long-bolt', 5.6, 0, pi, RANGED['ranged'], player)
+        move_bullet(player, bolt, .02)
+        self.assertTrue(bolt.active)
+        move_bullet(player, bolt, .03)
+        self.assertEqual(bolt.result, 'parry')
+        self.assertGreater(bolt.x - bolt.radius, player.get_bb()[2])
+        self.assertEqual((player.combat.hp, player.combat.energy), (100, 20))
+
     def test_parry_boundaries_match_for_swords_and_bolts_under_camera_projection(self):
         pitch = VISUALS['arena']['floor_y_ratio']
         for floor_y_ratio, zoom in ((1.0, 1.0), (pitch, 1.0), (pitch, .417)):
