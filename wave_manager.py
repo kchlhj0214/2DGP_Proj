@@ -32,6 +32,10 @@ class BridgeEntry:
         distance = portal_distance - travel
         enemy = self.enemy
         dx, dy = self.gate['x_ratio'], self.gate['y_ratio']
+        if dx:
+            # Start entirely behind the side gate and settle onto the shared route at the arena rim.
+            approach = max(0.0, 1.0 - max(0.0, travel) / ENTRY['portal_offset_m'])
+            distance += ENTRY['reveal_m'] * approach ** 2
         enemy.x = dx * distance
         enemy.y = dy * distance + enemy.height / 2
         inside = travel - ENTRY['portal_offset_m']
@@ -46,11 +50,13 @@ class BridgeEntry:
         self.enemy.visual_time = max(0.0, elapsed - self.passage_at)
         self.visible = min(1.0, max(0.0, travel / ENTRY['reveal_m']))
 
-    def draw(self):
+    def draw(self, portal_distance):
         enemy = self.enemy
         if self.visible > 0 and enemy.player.sprites:
+            side = self.gate['x_ratio']
+            clip_at_x = (side * portal_distance, -side) if side else None
             enemy.player.sprites.draw(enemy.sprite_actor, 'walk', enemy, enemy.player.camera,
-                                      enemy.angle, enemy.visual_time, reveal=self.visible)
+                                      enemy.angle, enemy.visual_time, reveal=self.visible, clip_at_x=clip_at_x)
 
 
 class WaveManager:
@@ -199,6 +205,7 @@ class WaveManager:
 
     def draw(self):
         self.player.arena.draw_gates(self)
+        portal_distance = self.portal_distance
         for entry in sorted(self.queue, key=lambda item: item.enemy.y, reverse=True):
-            entry.draw()
+            entry.draw(portal_distance)
         self.player.arena.draw_gates(self, foreground=True)

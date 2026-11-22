@@ -1,7 +1,7 @@
 """pico2d sprite sheets with fixed foot anchors and eight facing directions."""
 
 import json
-from math import floor, pi
+from math import ceil, floor, pi
 from pathlib import Path
 
 import pico2d
@@ -58,31 +58,41 @@ class SpriteLibrary:
             self.clips[actor, action] = clip, images
 
     def draw(self, actor, action, owner, camera, angle, elapsed=0.0, frame=None, flash=False,
-             reveal=1.0):
+             reveal=1.0, clip_at_x=None):
         clip, images = self.clips[actor, action]
         index = frame_index(clip, elapsed, frame)
         x, y = camera.to_screen(owner.x, owner.y - owner.height / 2)
-        scale = owner.height * camera.pixels_per_meter / self.body_pixels
+        meters_per_pixel = owner.height / self.body_pixels
+        scale = meters_per_pixel * camera.pixels_per_meter
         half = self.cell / 2
         x += (half - self.anchor[0]) * scale
         y += (self.anchor[1] - half) * scale
-        size = self.cell * scale
         bottom = (7 - direction(angle)) * self.cell
         image = images[bool(flash)]
         if actor == 'hero' and flash:
             color = (250, 55, 52) if flash == 'red' else (255, 255, 255)
             pico2d.SDL_SetTextureColorMod(image.texture, *color)
-        if reveal < 1.0:
+        left, width, height = 0, self.cell, self.cell
+        if clip_at_x is not None:
+            edge, inward = clip_at_x
+            column = self.anchor[0] + (edge - owner.x) / meters_per_pixel
+            if inward > 0:
+                left = max(0, ceil(column))
+                width -= left
+            else:
+                width = min(self.cell, floor(column))
+            if width <= 0:
+                return
+            x += (left + width / 2 - half) * scale
+        elif reveal < 1.0:
             # Skip the transparent padding beneath the feet; expose rows upwards from the foot anchor.
             rows = round(self.anchor[1] * reveal)
             if rows <= 0:
                 return
             foot_padding = self.cell - self.anchor[1]
-            height = (rows + foot_padding) * scale
-            image.clip_draw(index * self.cell, bottom, self.cell, rows + foot_padding,
-                            x, y - (size - height) / 2, size, height)
-        else:
-            image.clip_draw(index * self.cell, bottom, self.cell, self.cell, x, y, size, size)
+            height = rows + foot_padding
+            y -= (self.cell - height) * scale / 2
+        image.clip_draw(index * self.cell + left, bottom, width, height, x, y, width * scale, height * scale)
 
     def draw_projectile(self, projectile, camera):
         x, y = camera.to_screen(projectile.x, projectile.y)

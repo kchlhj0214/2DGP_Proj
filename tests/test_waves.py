@@ -336,7 +336,7 @@ class DebugInputRenderTests(unittest.TestCase):
                 pico2d.clear_canvas()
                 empty = read_canvas(640, 360)
                 entry.visible = reveal
-                entry.draw()
+                entry.draw(play_mode.waves.portal_distance)
                 frame = read_canvas(640, 360)
                 stride = 640 * 4
                 return [y for y in range(360)
@@ -347,6 +347,53 @@ class DebugInputRenderTests(unittest.TestCase):
             self.assertTrue(partial)
             self.assertEqual(max(partial), max(full))
             self.assertGreater(min(partial), min(full) + 10)
+        finally:
+            play_mode.finish()
+            pico2d.close_canvas()
+
+    def test_side_entries_are_clipped_at_the_doorway_in_both_directions(self):
+        pico2d.open_canvas(640, 360)
+        try:
+            play_mode.init()
+            waves = play_mode.waves
+            player = play_mode.player
+            camera = player.camera
+
+            def occupied(draw):
+                pico2d.clear_canvas()
+                empty = read_canvas(640, 360)
+                draw()
+                frame = read_canvas(640, 360)
+                return {divmod(i // 4, 640) for i in range(0, len(frame), 4)
+                        if empty[i:i + 4] != frame[i:i + 4]}
+
+            for entry in (e for e in waves.queue if e.gate['x_ratio']):
+                with self.subTest(gate=entry.gate['id'], actor=entry.enemy.sprite_actor):
+                    side = entry.gate['x_ratio']
+                    edge = side * waves.portal_distance
+                    camera.x = edge
+                    enemy = entry.enemy
+
+                    def draw_entry():
+                        entry.draw(waves.portal_distance)
+
+                    def draw_full_sprite():
+                        player.sprites.draw(enemy.sprite_actor, 'walk', enemy, camera,
+                                            enemy.angle, enemy.visual_time)
+
+                    entry.advance(entry.passage_at + .01, waves.portal_distance, waves.choose_landing)
+                    self.assertFalse(occupied(draw_entry))
+                    entry.advance(entry.passage_at + .23, waves.portal_distance, waves.choose_landing)
+                    partial = occupied(draw_entry)
+                    full = occupied(draw_full_sprite)
+                    self.assertTrue(0 < len(partial) < len(full))
+                    screen_x, _ = camera.to_screen(edge, 0)
+                    self.assertTrue(all(side * (x - screen_x) <= 1 for _, x in partial))
+                    self.assertTrue(any(side * (x - screen_x) > 1 for _, x in full))
+                    # The visible side includes upper-body pixels without lifting the whole image.
+                    self.assertLess(min(y for y, _ in partial), 175)
+                    entry.advance(entry.passage_at + .9, waves.portal_distance, waves.choose_landing)
+                    self.assertEqual(occupied(draw_entry), occupied(draw_full_sprite))
         finally:
             play_mode.finish()
             pico2d.close_canvas()
