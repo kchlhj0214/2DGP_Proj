@@ -12,7 +12,8 @@ from wave_data import GATES, RANGED
 class PatchRound:
     checks = ('gates-open-and-enemies-cross', 'arena-loads', 'parry-moves-enemy',
               'beam-three-pulses', 'ranged-fires',
-              'player-hit-flashes', 'enemies-stay-apart', 'walking-guard-blocks-side')
+              'player-hit-flashes', 'enemies-stay-apart', 'walking-guard-blocks-side',
+              'parry-reaches-incoming-bolt')
 
     def __init__(self, mode, report):
         self.mode = mode
@@ -25,6 +26,7 @@ class PatchRound:
         self.beam = None
         self.hit_colors = []
         self.side_shot = None
+        self.parry_shot = None
         self.saw_partial_entry = False
         self.gates_started_closed = all(mode.waves.gate_opening(gate) == 0 for gate in GATES)
 
@@ -65,7 +67,7 @@ class PatchRound:
                 player.pressed_keys.add(pico2d.SDLK_w)
                 self.write('pass')
         elif self.index == 1 and self.age >= 1.15:
-            if len(self.mode.arena.art) == 3 and player.y > 26 and player.visual_motion == 'run':
+            if self.mode.arena.gate_cell and player.y > 26 and player.visual_motion == 'run':
                 player.pressed_keys.clear()
                 self.spawn('melee', 0)
                 self.enemy.x += self.enemy.attack_distance(0) + .8
@@ -117,4 +119,20 @@ class PatchRound:
                 if self.side_shot.result != 'block':
                     self.write('fail', ': side projectile was not blocked during guard walk')
                 elif self.age >= 1.55:
+                    player.pressed_keys.clear()
+                    combat.right_up()
                     self.write('pass')
+        elif self.index == 8:
+            if self.parry_shot is None:
+                combat.aim = 0
+                combat.right_down()
+                reach = combat.settings['parry_radius_m']
+                self.parry_shot = Projectile('parry-distance', player.x + reach + 1, player.y,
+                                             pi, RANGED['ranged'], player)
+                self.mode.waves.add_projectile(self.parry_shot)
+            elif self.parry_shot.result:
+                gap = self.parry_shot.x - self.parry_shot.radius - player.get_bb()[2]
+                if self.parry_shot.result == 'parry' and gap > 1:
+                    self.write('pass')
+                else:
+                    self.write('fail', ': the projectile reached the body before being parried')
