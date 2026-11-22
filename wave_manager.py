@@ -72,7 +72,6 @@ class WaveManager:
         self.single_mode = None
         self.elapsed = 0.0
         self.time_limit_s = None
-        self.timed_out = False
         self.generation = 0
         self.queue = deque()
         self.spawn_log = []
@@ -114,7 +113,7 @@ class WaveManager:
         self.projectiles.append(projectile)
         game_world.add_object(projectile, 1)
 
-    def load(self, number=None, selection=None):
+    def load(self, number=None, selection=None, *, carry=False):
         if number is not None or selection is not None:
             self.single_mode = None
         if number is not None:
@@ -122,17 +121,28 @@ class WaveManager:
         if selection is not None:
             self.selection = selection
         wave = next(row for row in WAVES.values() if row['number'] == self.number)
-        # 객체 목록을 제자리에서 비워 광선/플레이어가 이전 목록을 참조하지 않게 한다.
-        for obj in self.enemies + self.projectiles:
-            game_world.remove_object(obj)
-        self.enemies.clear()
-        self.projectiles.clear()
-        self.queue.clear()
+        if carry:
+            for enemy in self.enemies[:]:
+                if enemy.hp <= 0:
+                    game_world.remove_object(enemy)
+                    self.enemies.remove(enemy)
+            # Keep the old entrance animations on the same frame when the wave clock resets.
+            for entry in self.queue:
+                entry.passage_at -= self.elapsed
+                entry.arrival_at -= self.elapsed
+            self.gate_lifts = {entry.gate['id']: self.gate_lifts[entry.gate['id']] - self.elapsed
+                               for entry in self.queue}
+        else:
+            # Keep the shared lists that combat, projectiles and the beam already refer to.
+            for obj in self.enemies + self.projectiles:
+                game_world.remove_object(obj)
+            self.enemies.clear()
+            self.projectiles.clear()
+            self.queue.clear()
+            self.gate_lifts.clear()
         self.spawn_log.clear()
-        self.gate_lifts.clear()
         self.overview_until = 0.0
         self.elapsed = 0.0
-        self.timed_out = False
         self.generation += 1
         kinds = ([wave['melee_id']] * wave['melee_per_gate']
                  + [wave['ranged_id']] * wave['ranged_per_gate'])
@@ -147,17 +157,21 @@ class WaveManager:
                 self.activate(self.make_enemy(gate, row['enemy_id'], 0), gate, row['enemy_id'], 0)
         elif kinds:
             gap = ENTRY['arrival_interval_s']
+            row_gap = len(GATES) * gap
+            first_passage = ENTRY['gate_wait_s'] + ENTRY['gate_lift_s']
+            if self.queue:
+                first_passage = max(first_passage, self.queue[-1].passage_at + row_gap)
             travel_time = (ENTRY['portal_offset_m'] + ENTRY['bridge_inset_m']) / ENTRY['entrance_speed_mps']
-            self.gate_lifts = {gate_id: ENTRY['gate_wait_s'] + index * gap
-                               for index, gate_id in enumerate(GATES)}
+            for side, gate_id in enumerate(GATES):
+                self.gate_lifts.setdefault(gate_id, first_passage + side * gap - ENTRY['gate_lift_s'])
             for index, kind in enumerate(kinds):
-                for gate in GATES.values():
-                    passage = self.gate_lifts[gate['id']] + ENTRY['gate_lift_s'] + index * len(GATES) * gap
+                for side, gate in enumerate(GATES.values()):
+                    passage = first_passage + index * row_gap + side * gap
                     enemy = self.make_enemy(gate, kind, index)
                     entry = BridgeEntry(enemy, gate, kind, passage, passage + travel_time)
                     entry.advance(0, self.portal_distance, self.choose_landing)
                     self.queue.append(entry)
-            if abs(self.player.x) + abs(self.player.y) < self.player.arena.radius / 4:
+            if not self.enemies and abs(self.player.x) + abs(self.player.y) < self.player.arena.radius / 4:
                 self.overview_until = self.queue[-1].arrival_at
 
     def make_enemy(self, gate, kind, index):
@@ -209,7 +223,7 @@ class WaveManager:
         return False
 
     def update(self):
-        if self.player.combat.hp > 0 and not self.timed_out:
+        if self.player.combat.hp > 0:
             self.elapsed += game_framework.frame_time
             while self.queue and self.queue[0].arrival_at <= self.elapsed + 1e-9:
                 entry = self.queue.popleft()
@@ -219,14 +233,11 @@ class WaveManager:
                 entry.advance(self.elapsed, self.portal_distance, self.choose_landing)
 
     def resolve_step(self):
-        if self.time_limit_s is None or self.timed_out or self.player.combat.hp <= 0:
+        if self.time_limit_s is None or self.player.combat.hp <= 0:
             return
-        if not self.queue and not any(enemy.hp > 0 for enemy in self.enemies):
-            self.load(number=self.number + 1)
-        elif self.remaining_s <= 1e-9:
-            self.elapsed = self.time_limit_s
-            self.timed_out = True
-            self.player.pause()
+        cleared = not self.queue and not any(enemy.hp > 0 for enemy in self.enemies)
+        if cleared or self.remaining_s <= 1e-9:
+            self.load(number=self.number + 1, carry=not cleared)
 
     def draw(self):
         self.player.arena.draw_gates(self)

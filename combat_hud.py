@@ -51,13 +51,11 @@ class CombatHUD:
         x, y = camera.width_px / 2, camera.height_px / 2
         if combat.time < combat.message_until:
             self.font.draw(x - 35, y + 58, combat.message, (248, 228, 142))
-        if mode.waves.timed_out:
-            self.font.draw(x - 107, y + 96, '시간 초과 · R로 재시작', (255, 172, 163))
-        elif mode.paused:
+        if mode.paused:
             self.font.draw(x - 100, y + 96, '일시정지 · ESC로 계속', (245, 236, 201))
         elif combat.hp <= 0:
             self.font.draw(x - 98, y + 96, '쓰러졌습니다 · R로 재시작', (255, 172, 163))
         elif mode.waves.single_mode is not None and remaining == 0:
             self.font.draw(x - 118, y + 96, 'Q로 단일 적 테스트 모드 전환', (171, 247, 195))
-        elif mode.waves.single_mode is None and mode.waves.number == 4:
+        elif mode.waves.number == 4 and mode.waves.single_mode is None and remaining == mode.waves.pending == 0:
             self.font.draw(x - 112, y + 96, '4웨이브 대기 · 보스 미구현', (171, 247, 195))

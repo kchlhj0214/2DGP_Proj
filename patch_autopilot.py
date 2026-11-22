@@ -13,7 +13,7 @@ class PatchRound:
     checks = ('gates-open-and-enemies-cross', 'arena-loads', 'parry-moves-enemy',
               'beam-three-pulses', 'ranged-fires',
               'player-hit-flashes', 'enemies-stay-apart', 'walking-guard-blocks-side',
-              'parry-reaches-incoming-bolt', 'wave-clears-to-next', 'wave-timeout-stops-play')
+              'parry-reaches-incoming-bolt', 'wave-clears-to-next', 'wave-timeout-adds-next')
 
     def __init__(self, mode, report):
         self.mode = mode
@@ -30,6 +30,7 @@ class PatchRound:
         self.saw_partial_entry = False
         self.gates_started_closed = all(mode.waves.gate_opening(gate) == 0 for gate in GATES)
         self.started_wave_check = False
+        self.carry_enemies = ()
 
     def write(self, result, detail=''):
         with self.report.open('a', encoding='utf-8') as report:
@@ -153,5 +154,10 @@ class PatchRound:
                     enemy.take_damage(enemy.hp)
         elif self.index == 10:
             waves = self.mode.waves
-            if waves.timed_out and waves.remaining_s == 0 and combat.hp > 0:
+            limit = SETTINGS['main']['time_limit_s']
+            if waves.number == 2 and self.mode.enemies and not self.carry_enemies:
+                self.carry_enemies = tuple(self.mode.enemies)
+            elif (waves.number == 3 and limit - .1 < waves.remaining_s <= limit
+                  and self.carry_enemies and all(enemy in self.mode.enemies for enemy in self.carry_enemies)
+                  and waves.pending == 16 and combat.hp > 0):
                 self.write('pass')

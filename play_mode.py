@@ -75,7 +75,7 @@ def handle_events():
             break
         elif event.type == pico2d.SDL_KEYDOWN and focused and waves.handle_key(event.key):
             break
-        elif focused and not paused and not waves.timed_out:
+        elif focused and not paused:
             player.handle_event(event)
 
 
@@ -86,7 +86,7 @@ def update():
         remaining = elapsed
         effects = player.effects
         try:
-            while remaining > 1e-10 and not waves.timed_out:
+            while remaining > 1e-10:
                 stop = effects.stopped_for
                 if stop > 1e-10:
                     frozen = min(remaining, stop)

@@ -119,6 +119,39 @@ class WaveTests(unittest.TestCase):
             self.assertEqual(waves.remaining_s, None if current == 3 else 120)
         self.assertEqual((player.combat.hp, player.combat.energy), (70, 20))
 
+    def test_deadline_keeps_pending_entries_and_adds_the_next_queue(self):
+        player, waves = controller()
+        waves.load()
+        # Preserve an entrance still in progress near the deadline.
+        for entry in waves.queue:
+            entry.passage_at += 118
+            entry.arrival_at += 118
+        waves.gate_lifts = {gate: time + 118 for gate, time in waves.gate_lifts.items()}
+        elapse(waves, 120)
+        carried = list(waves.queue)
+        positions = [(entry.enemy.x, entry.enemy.y, entry.visible) for entry in carried]
+        waves.resolve_step()
+        self.assertEqual((waves.number, waves.remaining_s, waves.pending), (2, 120, 20))
+        self.assertEqual(list(waves.queue)[:8], carried)
+        self.assertEqual([(entry.enemy.x, entry.enemy.y, entry.visible) for entry in carried], positions)
+        self.assertTrue(all(waves.gate_opening(gate) == 1 for gate in GATES))
+        waves.resolve_step()
+        self.assertEqual(waves.number, 2)
+        elapse(waves, 10)
+        self.assertEqual((waves.pending, len(waves.enemies)), (0, 20))
+        self.assertEqual(waves.enemies[:8], [entry.enemy for entry in carried])
+        self.assertEqual(len({e.identifier for e in waves.enemies}), 20)
+
+    def test_clear_at_the_deadline_advances_only_once(self):
+        _, waves = controller()
+        waves.load()
+        elapse(waves, 120)
+        for enemy in waves.enemies:
+            enemy.take_damage(enemy.hp)
+        waves.resolve_step()
+        waves.resolve_step()
+        self.assertEqual((waves.number, waves.pending, waves.remaining_s), (2, 12, 120))
+
     def test_q_cycles_zero_one_melee_one_ranged_and_clears_old_wave(self):
         player, waves = controller()
         waves.load(3)
@@ -521,35 +554,39 @@ class DebugInputRenderTests(unittest.TestCase):
             play_mode.finish()
             pico2d.close_canvas()
 
-    def test_timeout_stops_the_clock_and_movement_until_restart(self):
+    def test_timeout_starts_the_next_wave_without_interrupting_play(self):
         pico2d.open_canvas(640, 360)
         try:
             play_mode.init()
             wave = play_mode.waves
             player = play_mode.player
+            game_framework.frame_time = 5
+            play_mode.update()
+            survivors = tuple(play_mode.enemies)
+            survivors[0].take_damage(15)
+            game_framework.frame_time = player.effects.stopped_for
+            play_mode.update()
             wave.elapsed = 119.95
             player.pressed_keys.add(pico2d.SDLK_d)
             game_framework.frame_time = .04
             play_mode.update()
-            self.assertFalse(wave.timed_out)
+            self.assertEqual(wave.number, 1)
             self.assertGreater(wave.remaining_s, 0)
             game_framework.frame_time = .2
             play_mode.update()
-            self.assertTrue(wave.timed_out)
-            self.assertEqual((wave.number, wave.remaining_s, player.combat.hp), (1, 0, 100))
-            self.assertAlmostEqual(player.x, .05 * player.speed_mps)
-            stopped = (player.x, player.combat.time)
-            self.assertFalse(player.pressed_keys)
-            game_framework.frame_time = 2
-            play_mode.update()
-            self.assertEqual((player.x, player.combat.time), stopped)
+            self.assertEqual((wave.number, wave.pending, player.combat.hp), (2, 12, 100))
+            self.assertAlmostEqual(wave.remaining_s, 119.81)
+            self.assertAlmostEqual(player.x, .24 * player.speed_mps)
+            self.assertEqual(tuple(play_mode.enemies), survivors)
+            self.assertEqual(survivors[0].hp, 45)
+            self.assertEqual(wave.camera_zoom(), 1)
             event = pico2d.Event(pico2d.SDL_KEYDOWN)
             event.key = pico2d.SDLK_r
             with patch.object(pico2d, 'get_events', return_value=[event]), \
                  patch.object(pico2d, 'SDL_GetKeyboardFocus', return_value=True):
                 play_mode.handle_events()
             self.assertEqual((play_mode.waves.number, play_mode.waves.remaining_s), (1, 120))
-            self.assertFalse(play_mode.waves.timed_out)
+            self.assertFalse(play_mode.enemies)
         finally:
             play_mode.finish()
             pico2d.close_canvas()
