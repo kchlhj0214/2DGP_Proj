@@ -2,7 +2,7 @@
 
 import copy
 import json
-from math import pi
+from math import cos, pi, radians, sin
 import unittest
 from unittest.mock import patch
 
@@ -15,6 +15,7 @@ from enemy import MeleeEnemy
 from projectile import Projectile
 from ranged_enemy import RangedEnemy
 from combat_data import ENEMIES
+from presentation_data import VISUALS
 from wave_data import GATES, RANGED, SETTINGS
 from wave_manager import WaveManager
 from tools.generate_data import validate_waves
@@ -190,6 +191,38 @@ class WaveTests(unittest.TestCase):
 
 
 class RangedTests(unittest.TestCase):
+    def test_parry_boundaries_match_for_swords_and_bolts_under_camera_projection(self):
+        pitch = VISUALS['arena']['floor_y_ratio']
+        for floor_y_ratio, zoom in ((1.0, 1.0), (pitch, 1.0), (pitch, .417)):
+            for heading in (0, 90, 180, 270):
+                aim = radians(heading)
+                for offset, expected in ((-46, 'hit'), (-45, 'parry'), (45, 'parry'), (46, 'hit')):
+                    angle = aim + radians(offset)
+                    dx, dy = cos(angle), sin(angle)
+                    for attack in ('sword', 'bolt'):
+                        with self.subTest(pitch=floor_y_ratio, zoom=zoom, heading=heading,
+                                          offset=offset, attack=attack):
+                            player, _ = controller()
+                            camera = player.camera
+                            camera.floor_y_ratio, camera.zoom = floor_y_ratio, zoom
+                            x, y = camera.to_screen(12 * cos(aim), 12 * sin(aim))
+                            event = pico2d.Event(pico2d.SDL_MOUSEMOTION)
+                            event.x, event.y = round(x), round(camera.height_px - 1 - y)
+                            player.handle_event(event)
+                            player.combat.right_down()
+                            if attack == 'sword':
+                                enemy = MeleeEnemy(attack, ENEMIES['melee'], 2.9 * dx, 2.9 * dy, player)
+                                enemy.angle = angle + pi
+                                enemy.attack_id = attack
+                                enemy.age = enemy.data['swing_s'] / 2
+                                enemy.resolve_sword()
+                                self.assertEqual(player.combat.events[-1][1], expected)
+                            else:
+                                bolt = Projectile(attack, 3.25 * dx, 3.25 * dy, angle + pi,
+                                                  RANGED['ranged'], player)
+                                move_bullet(player, bolt, .22)
+                                self.assertEqual(bolt.result, expected)
+
     def test_approach_stop_fire_immediately_then_three_seconds(self):
         player, waves = controller()
         ranged = RangedEnemy('ranged-test', RANGED['ranged'], 16, 0, player, waves.add_projectile)

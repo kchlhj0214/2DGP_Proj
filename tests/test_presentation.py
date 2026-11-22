@@ -20,6 +20,36 @@ from wave_data import RANGED, SETTINGS
 
 
 class PresentationTests(TestCase):
+    def test_parry_arc_stays_visible_at_the_edge_during_the_wave_overview(self):
+        pico2d.open_canvas(640, 360)
+        try:
+            play_mode.init()
+            player = play_mode.player
+            camera = player.camera
+            camera.zoom = play_mode.waves.camera_zoom()
+            player.combat.aim = pi / 2
+            player.combat.right_down()
+            player.combat.advance(.11)
+            radius = player.height * VISUALS['parry']['indicator_height_ratio']
+            x, y = camera.to_screen(player.x, player.y + radius)
+            x, y = round(x), round(camera.height_px - 1 - y)
+
+            def arc_pixels():
+                pico2d.clear_canvas()
+                player.draw()
+                raw = read_canvas(640, 360)
+                offsets = [(row * 640 + col) * 4 for row in range(y - 2, y + 3)
+                           for col in range(x - 2, x + 3)]
+                return {raw[offset:offset + 3] for offset in offsets}
+
+            self.assertIn(bytes((111, 255, 169)), arc_pixels())
+            player.combat.advance(player.combat.window - .11)
+            self.assertIn(bytes((239, 166, 76)), arc_pixels())
+            self.assertNotIn(bytes((111, 255, 169)), arc_pixels())
+        finally:
+            play_mode.finish()
+            pico2d.close_canvas()
+
     def test_parry_snaps_up_and_recovers_without_changing_input_lock(self):
         player, enemy = actor()
         combat = player.combat

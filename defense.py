@@ -89,6 +89,9 @@ class PlayerCombat:
             return 0.0
         return max(0.0, self.settings['parry_move_lock_s'] - (self.time - self.started))
 
+    def parry_active(self):
+        return self.state == 'raising' and self.time - self.started < self.window - 1e-9
+
     def advance(self, dt):
         self.time += dt
         if self.state == 'raising':
@@ -134,12 +137,10 @@ class PlayerCombat:
         if self.hp <= 0 or attack_id in self.resolved:
             return 'ignored'
         self.resolved.add(attack_id)
-        in_window = (self.state == 'raising'
-                     and self.time - self.started < self.window - 1e-9)
         # 일반 피격 보호 중에는 새 패링으로 축적하지 않는다.
         if self.time < self.hit_invuln_until - 1e-9:
             return 'invulnerable'
-        if in_window and self.front(source):
+        if self.parry_active() and self.front(source):
             self.energy = min(self.settings['energy_max'], self.energy + energy_gain)
             if not self.success:
                 self.success_invuln_until = self.time + self.settings['success_invuln_s']
@@ -169,11 +170,15 @@ class PlayerCombat:
         return 'hit'
 
     def draw(self):
-        if self.state == 'guard' or self.position_lock_remaining() > 1e-9:
+        raising = self.position_lock_remaining() > 1e-9
+        if self.state == 'guard' or raising:
             color = (101, 185, 248) if self.state == 'guard' else (239, 166, 76)
-            if self.state == 'raising' and self.time - self.started < self.window:
+            if self.parry_active():
                 color = (111, 255, 169)
-            radius = self.owner.height * .65 if self.walking_guard() else 1.5
+            if raising:
+                radius = self.owner.height * VISUALS['parry']['indicator_height_ratio']
+            else:
+                radius = self.owner.height * .65 if self.walking_guard() else 1.5
             draw_sector(self.owner.x, self.owner.y, self.aim, radius,
                         self.guard_arc(), self.owner.camera, color)
         if self.time < self.success_invuln_until:
