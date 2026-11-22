@@ -75,7 +75,7 @@ def handle_events():
             break
         elif event.type == pico2d.SDL_KEYDOWN and focused and waves.handle_key(event.key):
             break
-        elif focused and not paused:
+        elif focused and not paused and not waves.timed_out:
             player.handle_event(event)
 
 
@@ -86,21 +86,26 @@ def update():
         remaining = elapsed
         effects = player.effects
         try:
-            while remaining > 1e-10:
+            while remaining > 1e-10 and not waves.timed_out:
                 stop = effects.stopped_for
                 if stop > 1e-10:
                     frozen = min(remaining, stop)
                     effects.update(frozen)
                     remaining -= frozen
                     continue
-                game_framework.frame_time = min(remaining, SYSTEMS['main']['step_s'])
-                effects.update(game_framework.frame_time)
+                step = min(remaining, SYSTEMS['main']['step_s'])
+                deadline = waves.remaining_s
+                if deadline is not None and player.combat.hp > 0:
+                    step = min(step, deadline)
+                game_framework.frame_time = step
+                effects.update(step)
                 game_world.update()
                 for projectile in projectiles[:]:
                     if not projectile.active:
                         projectiles.remove(projectile)
                         game_world.remove_object(projectile)
-                remaining -= game_framework.frame_time
+                waves.resolve_step()
+                remaining -= step
         finally:
             game_framework.frame_time = elapsed
     camera.follow(player)

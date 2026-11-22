@@ -96,6 +96,29 @@ class WaveTests(unittest.TestCase):
                         self.assertEqual([kind for _, entry, kind in waves.spawn_log if entry == gate],
                                          ['melee', 'ranged'])
 
+    def test_only_a_complete_clear_advances_and_resets_each_wave_timer(self):
+        player, waves = controller()
+        player.combat.hp, player.combat.energy = 70, 20
+        waves.load(1, 'melee')
+        self.assertEqual(waves.remaining_s, 120)
+        elapse(waves, 3.1)
+        waves.enemies[0].take_damage(waves.enemies[0].hp)
+        waves.resolve_step()
+        self.assertEqual((waves.number, waves.pending), (1, 7))
+        self.assertAlmostEqual(waves.remaining_s, 116.9)
+        for current, pending in ((1, 12), (2, 16), (3, 0)):
+            elapse(waves, 7)
+            for enemy in waves.enemies[:-1]:
+                enemy.take_damage(enemy.hp)
+            waves.resolve_step()
+            self.assertEqual(waves.number, current)
+            enemy = waves.enemies[-1]
+            enemy.take_damage(enemy.hp)
+            waves.resolve_step()
+            self.assertEqual((waves.number, waves.pending, waves.selection), (current + 1, pending, 'melee'))
+            self.assertEqual(waves.remaining_s, None if current == 3 else 120)
+        self.assertEqual((player.combat.hp, player.combat.energy), (70, 20))
+
     def test_q_cycles_zero_one_melee_one_ranged_and_clears_old_wave(self):
         player, waves = controller()
         waves.load(3)
@@ -180,6 +203,7 @@ class WaveTests(unittest.TestCase):
                                    ('waves', 'melee_per_gate', -1), ('waves', 'ranged_per_gate', 1.5),
                                    ('ranged', 'character_id', 'missing'), ('ranged', 'attack_interval_s', None),
                                    ('settings', 'arrival_interval_s', 0),
+                                   ('settings', 'time_limit_s', 0),
                                    ('settings', 'entrance_speed_mps', .1),
                                    ('settings', 'reveal_m', 8),
                                    ('single_modes', 'enemy_id', 'missing'),
@@ -493,6 +517,39 @@ class DebugInputRenderTests(unittest.TestCase):
             play_mode.camera.follow(play_mode.player)
             play_mode.render()
             capture_png(ROOT / 'shots/single-enemy-debug.png', 1280, 720)
+        finally:
+            play_mode.finish()
+            pico2d.close_canvas()
+
+    def test_timeout_stops_the_clock_and_movement_until_restart(self):
+        pico2d.open_canvas(640, 360)
+        try:
+            play_mode.init()
+            wave = play_mode.waves
+            player = play_mode.player
+            wave.elapsed = 119.95
+            player.pressed_keys.add(pico2d.SDLK_d)
+            game_framework.frame_time = .04
+            play_mode.update()
+            self.assertFalse(wave.timed_out)
+            self.assertGreater(wave.remaining_s, 0)
+            game_framework.frame_time = .2
+            play_mode.update()
+            self.assertTrue(wave.timed_out)
+            self.assertEqual((wave.number, wave.remaining_s, player.combat.hp), (1, 0, 100))
+            self.assertAlmostEqual(player.x, .05 * player.speed_mps)
+            stopped = (player.x, player.combat.time)
+            self.assertFalse(player.pressed_keys)
+            game_framework.frame_time = 2
+            play_mode.update()
+            self.assertEqual((player.x, player.combat.time), stopped)
+            event = pico2d.Event(pico2d.SDL_KEYDOWN)
+            event.key = pico2d.SDLK_r
+            with patch.object(pico2d, 'get_events', return_value=[event]), \
+                 patch.object(pico2d, 'SDL_GetKeyboardFocus', return_value=True):
+                play_mode.handle_events()
+            self.assertEqual((play_mode.waves.number, play_mode.waves.remaining_s), (1, 120))
+            self.assertFalse(play_mode.waves.timed_out)
         finally:
             play_mode.finish()
             pico2d.close_canvas()

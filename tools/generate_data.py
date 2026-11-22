@@ -145,7 +145,7 @@ def validate_presentation(data):
 def validate_waves(data, scale, combat):
     from math import isfinite
     schemas = {
-        'settings': {'id', 'arrival_interval_s', 'gate_wait_s', 'gate_lift_s', 'portal_offset_m',
+        'settings': {'id', 'time_limit_s', 'arrival_interval_s', 'gate_wait_s', 'gate_lift_s', 'portal_offset_m',
                      'bridge_inset_m', 'entrance_speed_mps', 'reveal_m', 'enemy_gap_m'},
         'waves': {'id', 'number', 'melee_id', 'ranged_id', 'melee_per_gate', 'ranged_per_gate'},
         'modes': {'id', 'key'},

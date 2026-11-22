@@ -71,6 +71,8 @@ class WaveManager:
         self.selection = 'all'
         self.single_mode = None
         self.elapsed = 0.0
+        self.time_limit_s = None
+        self.timed_out = False
         self.generation = 0
         self.queue = deque()
         self.spawn_log = []
@@ -102,6 +104,12 @@ class WaveManager:
     def pending(self):
         return len(self.queue)
 
+    @property
+    def remaining_s(self):
+        if self.time_limit_s is not None:
+            return max(0.0, self.time_limit_s - self.elapsed)
+        return None
+
     def add_projectile(self, projectile):
         self.projectiles.append(projectile)
         game_world.add_object(projectile, 1)
@@ -124,9 +132,11 @@ class WaveManager:
         self.gate_lifts.clear()
         self.overview_until = 0.0
         self.elapsed = 0.0
+        self.timed_out = False
         self.generation += 1
         kinds = ([wave['melee_id']] * wave['melee_per_gate']
                  + [wave['ranged_id']] * wave['ranged_per_gate'])
+        self.time_limit_s = ENTRY['time_limit_s'] if kinds and self.single_mode is None else None
         if self.selection != 'all':
             kinds = [wave[f'{self.selection}_id']] * len(kinds)
         if self.single_mode is not None:
@@ -199,7 +209,7 @@ class WaveManager:
         return False
 
     def update(self):
-        if self.player.combat.hp > 0:
+        if self.player.combat.hp > 0 and not self.timed_out:
             self.elapsed += game_framework.frame_time
             while self.queue and self.queue[0].arrival_at <= self.elapsed + 1e-9:
                 entry = self.queue.popleft()
@@ -207,6 +217,16 @@ class WaveManager:
                 self.activate(entry.enemy, entry.gate, entry.kind, entry.arrival_at, entry.landing)
             for entry in self.queue:
                 entry.advance(self.elapsed, self.portal_distance, self.choose_landing)
+
+    def resolve_step(self):
+        if self.time_limit_s is None or self.timed_out or self.player.combat.hp <= 0:
+            return
+        if not self.queue and not any(enemy.hp > 0 for enemy in self.enemies):
+            self.load(number=self.number + 1)
+        elif self.remaining_s <= 1e-9:
+            self.elapsed = self.time_limit_s
+            self.timed_out = True
+            self.player.pause()
 
     def draw(self):
         self.player.arena.draw_gates(self)

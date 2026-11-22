@@ -1,5 +1,6 @@
 # 자동 생성 파일: data/waves.json을 수정한 뒤 tools/generate_data.py 실행
 SETTINGS = {'main': {'id': 'main',
+          'time_limit_s': 120,
           'arrival_interval_s': 0.24,
           'gate_wait_s': 0.45,
           'gate_lift_s': 0.55,

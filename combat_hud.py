@@ -1,5 +1,6 @@
 """도형 전투 상태, 체력, 에너지와 조작 안내."""
 
+from math import ceil
 from pathlib import Path
 
 import pico2d
@@ -41,12 +42,18 @@ class CombatHUD:
         status = (f'Q 테스트  |  {single[mode.waves.single_mode]}' if mode.waves.single_mode is not None
                   else f'WAVE {mode.waves.number}  |  {selections[mode.waves.selection]}  |  대기 {mode.waves.pending}')
         self.font.draw(24, top - 123, status, (218, 228, 248))
+        if mode.waves.remaining_s is not None:
+            minutes, seconds = divmod(ceil(mode.waves.remaining_s), 60)
+            color = (255, 164, 143) if minutes == 0 else (244, 220, 164)
+            self.font.draw(281, top - 123, f'{minutes:02d}:{seconds:02d}', color)
         self.font.draw(22, 47, 'WASD 이동 | 우클릭 패링/방어 | 좌클릭 광선 | R 재시작 | ESC 일시정지', (205, 218, 228))
         self.font.draw(22, 23, '1~4 웨이브 | 8 근접만 | 9 원거리만 | 0 혼합 | Q 적 없음/근접 1/원거리 1', (237, 208, 146))
         x, y = camera.width_px / 2, camera.height_px / 2
         if combat.time < combat.message_until:
             self.font.draw(x - 35, y + 58, combat.message, (248, 228, 142))
-        if mode.paused:
+        if mode.waves.timed_out:
+            self.font.draw(x - 107, y + 96, '시간 초과 · R로 재시작', (255, 172, 163))
+        elif mode.paused:
             self.font.draw(x - 100, y + 96, '일시정지 · ESC로 계속', (245, 236, 201))
         elif combat.hp <= 0:
             self.font.draw(x - 98, y + 96, '쓰러졌습니다 · R로 재시작', (255, 172, 163))
@@ -54,5 +61,3 @@ class CombatHUD:
             self.font.draw(x - 118, y + 96, 'Q로 단일 적 테스트 모드 전환', (171, 247, 195))
         elif mode.waves.single_mode is None and mode.waves.number == 4:
             self.font.draw(x - 112, y + 96, '4웨이브 대기 · 보스 미구현', (171, 247, 195))
-        elif remaining == 0 and mode.waves.pending == 0:
-            self.font.draw(x - 118, y + 96, '웨이브 정리 · 숫자 키로 이동', (171, 247, 195))
