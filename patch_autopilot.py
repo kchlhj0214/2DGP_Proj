@@ -6,14 +6,14 @@ import pico2d
 
 from enemy_spacing import is_free
 from projectile import Projectile
-from wave_data import GATES, RANGED
+from wave_data import GATES, RANGED, SETTINGS
 
 
 class PatchRound:
     checks = ('gates-open-and-enemies-cross', 'arena-loads', 'parry-moves-enemy',
               'beam-three-pulses', 'ranged-fires',
               'player-hit-flashes', 'enemies-stay-apart', 'walking-guard-blocks-side',
-              'parry-reaches-incoming-bolt')
+              'parry-reaches-incoming-bolt', 'wave-clears-to-next', 'wave-timeout-stops-play')
 
     def __init__(self, mode, report):
         self.mode = mode
@@ -29,6 +29,7 @@ class PatchRound:
         self.parry_shot = None
         self.saw_partial_entry = False
         self.gates_started_closed = all(mode.waves.gate_opening(gate) == 0 for gate in GATES)
+        self.started_wave_check = False
 
     def write(self, result, detail=''):
         with self.report.open('a', encoding='utf-8') as report:
@@ -136,3 +137,21 @@ class PatchRound:
                     self.write('pass')
                 else:
                     self.write('fail', ': the projectile reached the body before being parried')
+        elif self.index == 9:
+            waves = self.mode.waves
+            limit = SETTINGS['main']['time_limit_s']
+            if not self.started_wave_check:
+                player.x = player.y = 0.0
+                waves.load(1, 'all')
+                self.started_wave_check = True
+            elif waves.number == 2 and limit - .1 < waves.remaining_s <= limit:
+                # Cross the real deadline without holding the desktop test open for two minutes.
+                waves.elapsed = limit - .5
+                self.write('pass')
+            elif waves.number == 1 and not waves.pending and 0 < waves.remaining_s < limit:
+                for enemy in self.mode.enemies:
+                    enemy.take_damage(enemy.hp)
+        elif self.index == 10:
+            waves = self.mode.waves
+            if waves.timed_out and waves.remaining_s == 0 and combat.hp > 0:
+                self.write('pass')
