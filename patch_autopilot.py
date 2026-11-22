@@ -11,7 +11,7 @@ from wave_data import GATES, RANGED, SETTINGS
 
 class PatchRound:
     checks = ('gates-open-and-enemies-cross', 'arena-loads', 'parry-moves-enemy',
-              'beam-three-pulses', 'ranged-fires',
+              'beam-three-pulses-heals', 'ranged-fires',
               'player-hit-flashes', 'enemies-stay-apart', 'walking-guard-blocks-side',
               'parry-reaches-incoming-bolt', 'wave-clears-to-next', 'wave-timeout-adds-next')
 
@@ -84,12 +84,15 @@ class PatchRound:
                 combat.right_up()
                 self.write('pass')
         elif self.index == 3:
+            full_health = combat.settings['player_hp']
             if not self.beam and combat.state == 'free' and self.age > .25:
                 combat.energy = 40
+                combat.hp = full_health - combat.settings['heal_per_kill']
                 combat.fire()
                 self.beam = combat.beam
             if self.beam and not self.beam.active and self.beam.ticks == 3:
-                if all(self.enemy.identifier in ids for ids in self.beam.hit_ids) and player.effects.sound:
+                if (all(self.enemy.identifier in ids for ids in self.beam.hit_ids)
+                        and self.enemy.hp == 0 and combat.hp == full_health and player.effects.sound):
                     self.spawn('ranged', 14)
                     self.write('pass')
         elif self.index == 4:

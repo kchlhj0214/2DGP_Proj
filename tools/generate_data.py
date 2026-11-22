@@ -221,7 +221,7 @@ def validate_waves(data, scale, combat):
 def validate_combat(data, scale):
     from math import isfinite
     schemas = {
-        'systems': {'id', 'player_hp', 'guard_kmph', 'input_lock_s', 'parry_move_lock_s',
+        'systems': {'id', 'player_hp', 'heal_per_kill', 'guard_kmph', 'input_lock_s', 'parry_move_lock_s',
                     'success_invuln_s', 'hit_invuln_s', 'stun_s', 'guard_angle_deg',
                     'guard_walk_angle_deg', 'parry_radius_m', 'parry_push_range_m', 'energy_max',
                     'damage_multiplier', 'beam_duration_s', 'beam_tick_s', 'step_s'},

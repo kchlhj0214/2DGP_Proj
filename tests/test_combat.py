@@ -14,6 +14,8 @@ import play_mode
 from combat_data import ENEMIES, SYSTEMS
 from enemy import MeleeEnemy
 from geometry import box_points, intersects, oriented_box, warning_strength
+from ranged_enemy import RangedEnemy
+from wave_data import RANGED
 
 
 def actor(x=None, y=0, identifier='one'):
@@ -58,6 +60,23 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(beam.ticks, 3)
         self.assertEqual(combat.energy, 0)
         self.assertEqual(combat.state, 'free')
+
+    def test_each_enemy_killed_by_the_beam_restores_health_up_to_the_cap(self):
+        for initial, expected in ((55, 75), (95, 100), (100, 100)):
+            with self.subTest(initial_hp=initial):
+                player, melee = actor(4)
+                ranged = RangedEnemy('ranged', RANGED['ranged'], 8, 0, player, lambda _: None)
+                player.targets.append(ranged)
+                combat = player.combat
+                combat.hp = initial
+                combat.energy = 40
+                self.assertTrue(combat.fire())
+                advance(player, [], .5)
+                self.assertEqual((melee.hp, ranged.hp, combat.hp), (20, 20, initial))
+                advance(player, [], .5)
+                self.assertEqual((melee.hp, ranged.hp, combat.hp), (0, 0, expected))
+                advance(player, [], .5)
+                self.assertEqual(combat.hp, expected)
 
     def test_stage_thresholds_and_maximum(self):
         player, enemy = actor()

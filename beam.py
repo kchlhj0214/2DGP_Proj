@@ -71,6 +71,8 @@ class Beam:
             if polygon and enemy.hp > 0 and intersects(polygon, box_points(enemy.get_bb())):
                 enemy.take_damage(self.damage)
                 hits.append(enemy.identifier)
+                if enemy.hp == 0:
+                    self.owner.combat.heal_on_kill()
         self.hit_ids.append(hits)
         self.ticks += 1
         if self.owner.effects:

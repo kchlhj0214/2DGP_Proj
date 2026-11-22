@@ -36,6 +36,11 @@ class PlayerCombat:
         return next(row for row in reversed(list(STAGES.values()))
                     if self.energy >= row['energy_min'])
 
+    def heal_on_kill(self):
+        maximum = self.settings['player_hp']
+        if 0 < self.hp < maximum:
+            self.hp = min(maximum, self.hp + self.settings['heal_per_kill'])
+
     def feedback(self, result):
         self.message = result.upper()
         self.message_until = self.time + .4
