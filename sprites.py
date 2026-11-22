@@ -58,10 +58,11 @@ class SpriteLibrary:
             self.clips[actor, action] = clip, images
 
     def draw(self, actor, action, owner, camera, angle, elapsed=0.0, frame=None, flash=False,
-             reveal=1.0, clip_at_x=None):
+             reveal=1.0, clip_at_x=None, clip_above_y=None):
         clip, images = self.clips[actor, action]
         index = frame_index(clip, elapsed, frame)
-        x, y = camera.to_screen(owner.x, owner.y - owner.height / 2)
+        foot_y = owner.y - owner.height / 2
+        x, y = camera.to_screen(owner.x, foot_y)
         meters_per_pixel = owner.height / self.body_pixels
         scale = meters_per_pixel * camera.pixels_per_meter
         half = self.cell / 2
@@ -84,6 +85,15 @@ class SpriteLibrary:
             if width <= 0:
                 return
             x += (left + width / 2 - half) * scale
+        elif clip_above_y is not None:
+            foot_padding = self.cell - self.anchor[1]
+            projected = (clip_above_y - foot_y) * camera.floor_y_ratio
+            hidden = max(0, ceil(foot_padding + projected / meters_per_pixel))
+            if hidden >= height:
+                return
+            bottom += hidden
+            height -= hidden
+            y += hidden * scale / 2
         elif reveal < 1.0:
             # Skip the transparent padding beneath the feet; expose rows upwards from the foot anchor.
             rows = round(self.anchor[1] * reveal)

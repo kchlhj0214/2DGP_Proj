@@ -25,7 +25,8 @@ class Arena:
         atlas = self.art[1]
         columns = ART['gate_atlas_cols']
         rows = ceil(len(GATES) * ART['gate_lift_frames'] / columns)
-        if atlas.w % columns or atlas.h % rows or atlas.h // rows <= ART['gate_anchor_from_bottom_px']:
+        if (atlas.w % columns or atlas.h % rows
+                or atlas.h // rows <= ART['gate_anchor_from_bottom_px'] + ART['gate_south_roof_px']):
             raise ValueError('철창 이미지 시트 크기가 다릅니다.')
         self.gate_cell = atlas.w // columns, atlas.h // rows
 
@@ -62,6 +63,10 @@ class Arena:
         scale = self.radius * camera.pixels_per_meter / ART['crypt_radius_px']
         image = self.art[0]
         image.clip_draw(0, 0, image.w, image.h, center_x, center_y, image.w * scale, image.h * scale)
+
+    def south_gate_roof(self, portal_distance):
+        roof_height = ART['gate_south_roof_px'] * self.radius / ART['crypt_radius_px']
+        return -portal_distance + roof_height / self.camera.floor_y_ratio
 
     def draw_gates(self, waves, foreground=False):
         if not self.art:

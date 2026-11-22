@@ -32,10 +32,13 @@ class BridgeEntry:
         distance = portal_distance - travel
         enemy = self.enemy
         dx, dy = self.gate['x_ratio'], self.gate['y_ratio']
+        approach = max(0.0, 1.0 - max(0.0, travel) / ENTRY['portal_offset_m'])
         if dx:
             # Start entirely behind the side gate and settle onto the shared route at the arena rim.
-            approach = max(0.0, 1.0 - max(0.0, travel) / ENTRY['portal_offset_m'])
             distance += ENTRY['reveal_m'] * approach ** 2
+        elif dy < 0:
+            # Stage behind the roof so the head reaches its edge soon after the gate opens.
+            distance -= ENTRY['reveal_m'] * approach
         enemy.x = dx * distance
         enemy.y = dy * distance + enemy.height / 2
         inside = travel - ENTRY['portal_offset_m']
@@ -55,8 +58,10 @@ class BridgeEntry:
         if self.visible > 0 and enemy.player.sprites:
             side = self.gate['x_ratio']
             clip_at_x = (side * portal_distance, -side) if side else None
+            roof = enemy.player.arena.south_gate_roof(portal_distance) if self.gate['y_ratio'] < 0 else None
             enemy.player.sprites.draw(enemy.sprite_actor, 'walk', enemy, enemy.player.camera,
-                                      enemy.angle, enemy.visual_time, reveal=self.visible, clip_at_x=clip_at_x)
+                                      enemy.angle, enemy.visual_time, reveal=self.visible,
+                                      clip_at_x=clip_at_x, clip_above_y=roof)
 
 
 class WaveManager:

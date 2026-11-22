@@ -6,6 +6,7 @@
       "bridge_width_m": 5.0, "floor_y_ratio": 0.84,
       "crypt_art": "assets/crypt/arena.png", "gate_atlas": "assets/crypt/gate-atlas.png",
       "gate_atlas_cols": 8, "gate_lift_frames": 17, "gate_anchor_from_bottom_px": 100,
+      "gate_south_roof_px": 255,
       "crypt_radius_px": 1126, "gate_height_m": 4.8,
       "overview_return_s": 0.8,
       "wall_base_px": [

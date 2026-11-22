@@ -72,7 +72,7 @@ def validate_presentation(data):
     schemas = {
         'arena': {'art', 'water', 'ring_radius_px', 'wall_base_px', 'bank_drop_px', 'bridge_width_m',
                   'floor_y_ratio', 'crypt_art', 'gate_atlas', 'gate_atlas_cols', 'gate_lift_frames',
-                  'gate_anchor_from_bottom_px', 'crypt_radius_px', 'gate_height_m',
+                  'gate_anchor_from_bottom_px', 'gate_south_roof_px', 'crypt_radius_px', 'gate_height_m',
                   'overview_return_s'},
         'sprites': {'atlas', 'asset_dir', 'body_height_px', 'projectile_art'},
         'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'player_flash_phase_s', 'number_s', 'rise_m',
@@ -101,9 +101,9 @@ def validate_presentation(data):
         if row['id'] == 'arena' and row['floor_y_ratio'] > 1:
             raise ValueError('경기장 바닥의 세로 투영은 가로를 넘을 수 없습니다.')
         if row['id'] == 'arena':
-            columns, frames, anchor = (row[key] for key in ('gate_atlas_cols', 'gate_lift_frames',
-                                                            'gate_anchor_from_bottom_px'))
-            if any(type(value) is not int for value in (columns, frames, anchor)) or frames < 2:
+            gate_pixels = ('gate_atlas_cols', 'gate_lift_frames', 'gate_anchor_from_bottom_px',
+                           'gate_south_roof_px')
+            if any(type(row[key]) is not int for key in gate_pixels) or row['gate_lift_frames'] < 2:
                 raise ValueError('철창 이미지 시트의 칸 수와 기준점이 올바르지 않습니다.')
     assets = next(row for row in rows if row['id'] == 'sprites')
     atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))

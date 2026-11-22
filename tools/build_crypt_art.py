@@ -315,6 +315,10 @@ def gate_images():
             continue
         frame, outline = gate_frame(width, height, rear=direction == 'south')
         structure, inverse = gate_view(cell, frame, outline, -10 if direction == 'south' else 0)
+        if direction == 'south':
+            roof_top = structure.getchannel('A').getbbox()[1]
+            if cell[1] - ART['gate_anchor_from_bottom_px'] - roof_top != ART['gate_south_roof_px']:
+                raise ValueError('The south gate roof marker must match the atlas silhouette.')
         for phase in range(frames):
             face = Image.new('RGBA', frame.size)
             lift = round(bars.height * phase / (frames - 1))
