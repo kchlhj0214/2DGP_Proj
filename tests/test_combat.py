@@ -336,10 +336,10 @@ class CombatRenderTests(unittest.TestCase):
         try:
             play_mode.init()
             player = play_mode.player
+            play_mode.waves.single_mode = 'melee'
+            play_mode.waves.load()
             enemy = play_mode.enemies[0]
             enemy.x, enemy.y = enemy.attack_distance(0), 0
-            for other in play_mode.enemies[1:]:
-                other.take_damage(60)
             advance(player, [enemy], .55)
             event = pico2d.Event(pico2d.SDL_MOUSEBUTTONDOWN)
             event.button = pico2d.SDL_BUTTON_RIGHT
@@ -389,8 +389,10 @@ class CombatRenderTests(unittest.TestCase):
                 play_mode.handle_events()
             self.assertIsNot(player, play_mode.player)
             self.assertEqual((play_mode.player.combat.hp, play_mode.player.combat.energy), (100, 0))
-            self.assertTrue(all(e.hp == 60 for e in play_mode.enemies))
+            self.assertTrue(all(entry.enemy.hp == 60 for entry in play_mode.waves.queue))
             # 실제로 회전하는 칼의 판정을 그린다.
+            play_mode.waves.single_mode = 'melee'
+            play_mode.waves.load()
             enemy = play_mode.enemies[0]
             enemy.x, enemy.y = enemy.attack_distance(0), 0
             advance(play_mode.player, [enemy], .68)

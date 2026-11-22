@@ -11,7 +11,7 @@ from combat_data import ENEMIES
 from enemy import MeleeEnemy
 from enemy_spacing import move_enemy, overlaps, spawn_position
 from ranged_enemy import RangedEnemy
-from wave_data import RANGED
+from wave_data import GATES, RANGED, SETTINGS
 from wave_manager import WaveManager
 
 
@@ -73,13 +73,14 @@ class SpacingTests(unittest.TestCase):
         arena, player, camera = scene()
         waves = WaveManager(player, player.targets, player.projectiles)
         waves.load(3, 'all')
-        game_framework.frame_time = .9
+        game_framework.frame_time = 8
         waves.update()  # 기존 적이 전혀 움직이지 않아도 다음 적은 겹치지 않는다.
         self.assertEqual((len(player.targets), waves.pending), (16, 0))
         self.assert_separate(player.targets)
-        for gate in ('north', 'south', 'west', 'east'):
-            times = [round(t, 6) for t, g, _ in waves.spawn_log if g == gate]
-            self.assertEqual(times, [0, .3, .6, .9])
+        self.assertEqual([gate for _, gate, _ in waves.spawn_log], list(GATES) * 4)
+        gap = SETTINGS['main']['arrival_interval_s']
+        for index, (time, _, _) in enumerate(waves.spawn_log):
+            self.assertAlmostEqual(time, waves.spawn_log[0][0] + gap * index)
 
     def test_mixed_crowd_near_each_circular_boundary(self):
         arena, player, camera = scene()
@@ -123,10 +124,11 @@ class SpacingRenderTests(unittest.TestCase):
             play_mode.waves.load(3, 'all')
             play_mode.player.x, play_mode.player.y = 0, 25
             play_mode.camera.follow(play_mode.player)
-            game_framework.frame_time = 1
+            game_framework.frame_time = 7.4
             play_mode.update()
             play_mode.render()
             capture_png(ROOT / 'shots/enemy-spacing.png', 1280, 720)
+            self.assertEqual(len(play_mode.enemies), 16)
             for index, enemy in enumerate(play_mode.enemies):
                 for other in play_mode.enemies[index + 1:]:
                     self.assertFalse(overlaps(enemy, enemy.x, enemy.y, other))

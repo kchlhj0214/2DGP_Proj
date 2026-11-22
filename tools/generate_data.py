@@ -70,14 +70,17 @@ def generate():
 
 def validate_presentation(data):
     schemas = {
-        'arena': {'art', 'water', 'ring_radius_px', 'wall_base_px', 'bank_drop_px', 'bridge_width_m'},
+        'arena': {'art', 'water', 'ring_radius_px', 'wall_base_px', 'bank_drop_px', 'bridge_width_m',
+                  'floor_y_ratio', 'crypt_art', 'gate_frame', 'gate_bars', 'crypt_radius_px', 'gate_height_m',
+                  'overview_return_s'},
         'sprites': {'atlas', 'asset_dir', 'body_height_px', 'projectile_art'},
         'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'player_flash_phase_s', 'number_s', 'rise_m',
                    'shake_s', 'shake_m', 'max_shake_m'},
         'parry': {'push_height_ratio', 'push_s', 'raise_s', 'return_s', 'success_hold_s'},
         'beam': {'taper_width_ratio'},
     }
-    paths = {'art', 'water', 'atlas', 'asset_dir', 'sound', 'projectile_art'}
+    paths = {'art', 'water', 'atlas', 'asset_dir', 'sound', 'projectile_art',
+             'crypt_art', 'gate_frame', 'gate_bars'}
     rows = data.get('visuals', [])
     if len(rows) != len(schemas) or {row.get('id') for row in rows} != set(schemas):
         raise ValueError('화면 연출 시트 누락')
@@ -94,6 +97,8 @@ def validate_presentation(data):
                 raise ValueError(f'{field}: 없는 리소스')
             if field not in paths | {'id'} and (type(value) not in (int, float) or not isfinite(value) or value <= 0):
                 raise ValueError(f'{field}: 양의 유한 수가 필요합니다')
+        if row['id'] == 'arena' and row['floor_y_ratio'] > 1:
+            raise ValueError('경기장 바닥의 세로 투영은 가로를 넘을 수 없습니다.')
     assets = next(row for row in rows if row['id'] == 'sprites')
     atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))
     expected = {'hero': {'idle','guard_walk','guard_walk_front','guard','run','parry'},
@@ -134,7 +139,8 @@ def validate_presentation(data):
 def validate_waves(data, scale, combat):
     from math import isfinite
     schemas = {
-        'settings': {'id', 'spawn_interval_s', 'enemy_gap_m'},
+        'settings': {'id', 'arrival_interval_s', 'gate_wait_s', 'gate_lift_s', 'portal_offset_m',
+                     'bridge_inset_m', 'entrance_speed_mps', 'reveal_m', 'enemy_gap_m'},
         'waves': {'id', 'number', 'melee_id', 'ranged_id', 'melee_per_gate', 'ranged_per_gate'},
         'modes': {'id', 'key'},
         'single_modes': {'id', 'enemy_id', 'count'},
@@ -169,9 +175,12 @@ def validate_waves(data, scale, combat):
         raise ValueError('1~4 웨이브가 필요합니다.')
     if {row['id']: row['key'] for row in data['modes']} != {'all': 0, 'melee': 8, 'ranged': 9}:
         raise ValueError('디버그 모드 키 설정이 잘못되었습니다.')
-    if {row['id']: (row['x_ratio'], row['y_ratio']) for row in data['gates']} != {
-            'north': (0, 1), 'south': (0, -1), 'west': (-1, 0), 'east': (1, 0)}:
-        raise ValueError('상하좌우 입구가 필요합니다.')
+    if [(row['id'], row['x_ratio'], row['y_ratio']) for row in data['gates']] != [
+            ('north', 0, 1), ('east', 1, 0), ('south', 0, -1), ('west', -1, 0)]:
+        raise ValueError('상우하좌 순서의 입구가 필요합니다.')
+    entry = data['settings'][0]
+    if entry['reveal_m'] >= entry['portal_offset_m']:
+        raise ValueError('등장 마스크는 경기장 경계 전에 끝나야 합니다.')
     melee_ids = {row['id'] for row in combat['enemies']}
     ranged_ids = {row['id'] for row in data['ranged']}
     if [row['id'] for row in data['single_modes']] != ['none', 'melee', 'ranged']:
@@ -190,6 +199,11 @@ def validate_waves(data, scale, combat):
         if row['number'] == 4 and row['melee_per_gate'] + row['ranged_per_gate'] != 0:
             raise ValueError('보스 미구현 4웨이브는 비어 있어야 합니다.')
     characters = {row['id']: row for row in scale['characters']}
+    heights = {row['id']: row['height_m'] for row in scale['viewports']}
+    tallest = max(heights[row['viewport_id']] * row['height_ratio'] for row in characters.values())
+    line_gap = len(data['gates']) * entry['arrival_interval_s'] * entry['entrance_speed_mps']
+    if line_gap < tallest + entry['enemy_gap_m']:
+        raise ValueError('입구 대기열에서 적 사이 간격이 부족합니다.')
     for row in data['ranged']:
         if row['character_id'] not in characters:
             raise ValueError('존재하지 않는 원거리 캐릭터 참조')

@@ -34,7 +34,8 @@ def shield_emitter(owner, action, angle, elapsed):
     sx, sy = clip['shield_px'][direction(angle)][frame_index(clip, elapsed)]
     ox, oy = ATLAS['origin_px']
     scale = owner.height / SETTINGS['body_height_px']
-    return owner.x + (sx - ox) * scale, owner.y - owner.height / 2 + (oy - sy) * scale
+    return (owner.x + (sx - ox) * scale,
+            owner.y - owner.height / 2 + (oy - sy) * scale / owner.camera.floor_y_ratio)
 
 
 class SpriteLibrary:
@@ -56,7 +57,8 @@ class SpriteLibrary:
                 raise ValueError(f'스프라이트 시트 크기가 다릅니다: {actor}/{action}')
             self.clips[actor, action] = clip, images
 
-    def draw(self, actor, action, owner, camera, angle, elapsed=0.0, frame=None, flash=False):
+    def draw(self, actor, action, owner, camera, angle, elapsed=0.0, frame=None, flash=False,
+             reveal=1.0):
         clip, images = self.clips[actor, action]
         index = frame_index(clip, elapsed, frame)
         x, y = camera.to_screen(owner.x, owner.y - owner.height / 2)
@@ -70,7 +72,17 @@ class SpriteLibrary:
         if actor == 'hero' and flash:
             color = (250, 55, 52) if flash == 'red' else (255, 255, 255)
             pico2d.SDL_SetTextureColorMod(image.texture, *color)
-        image.clip_draw(index * self.cell, bottom, self.cell, self.cell, x, y, size, size)
+        if reveal < 1.0:
+            # Skip the transparent padding beneath the feet; expose rows upwards from the foot anchor.
+            rows = round(self.anchor[1] * reveal)
+            if rows <= 0:
+                return
+            foot_padding = self.cell - self.anchor[1]
+            height = (rows + foot_padding) * scale
+            image.clip_draw(index * self.cell, bottom, self.cell, rows + foot_padding,
+                            x, y - (size - height) / 2, size, height)
+        else:
+            image.clip_draw(index * self.cell, bottom, self.cell, self.cell, x, y, size, size)
 
     def draw_projectile(self, projectile, camera):
         x, y = camera.to_screen(projectile.x, projectile.y)

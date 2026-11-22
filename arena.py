@@ -5,6 +5,10 @@ from pathlib import Path
 
 import pico2d
 from presentation_data import VISUALS
+from wave_data import GATES
+
+
+ART = VISUALS['arena']
 
 
 class Arena:
@@ -15,8 +19,8 @@ class Arena:
 
     def load_art(self):
         root = Path(__file__).resolve().parent
-        settings = VISUALS['arena']
-        self.art = tuple(pico2d.load_image(str(root / settings[name])) for name in ('art', 'water'))
+        self.art = tuple(pico2d.load_image(str(root / ART[name]))
+                         for name in ('crypt_art', 'gate_frame', 'gate_bars'))
 
     def update(self):
         pass
@@ -44,8 +48,29 @@ class Arena:
                 (1 if y >= 0 else -1) * max(0.0, far_y - half_h))
 
     def draw(self):
+        if not self.art:
+            return
         camera = self.camera
         center_x, center_y = camera.to_screen(0, 0)
-        scale = self.radius * camera.pixels_per_meter / VISUALS['arena']['ring_radius_px']
-        for image in self.art:
-            image.draw(center_x, center_y, round(image.w * scale), round(image.h * scale))
+        scale = self.radius * camera.pixels_per_meter / ART['crypt_radius_px']
+        image = self.art[0]
+        image.clip_draw(0, 0, image.w, image.h, center_x, center_y, image.w * scale, image.h * scale)
+
+    def draw_gates(self, waves):
+        if not self.art:
+            return
+        _, frame, bars = self.art
+        scale = self.radius * self.camera.pixels_per_meter / ART['crypt_radius_px']
+        for gate_id, gate in GATES.items():
+            x, y = self.camera.to_screen(gate['x_ratio'] * waves.portal_distance,
+                                         gate['y_ratio'] * waves.portal_distance)
+            side = gate['x_ratio'] != 0
+            width = scale * (0.78 if side else 1)
+            # The top of the ironwork slides behind the lintel without scaling the bars.
+            lift = round(bars.h * waves.gate_opening(gate_id))
+            remaining = bars.h - lift
+            if remaining:
+                bars.clip_draw(0, 0, bars.w, remaining, x, y + (lift + remaining / 2) * scale,
+                               bars.w * width, remaining * scale)
+            frame.clip_draw(0, 0, frame.w, frame.h, x, y + frame.h * scale / 2,
+                            frame.w * width, frame.h * scale)

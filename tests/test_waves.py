@@ -1,4 +1,4 @@
-"""웨이브 교체, 동시 출현, 원거리 발사와 탄환의 실제 전투 판정 검사."""
+"""웨이브 교체, 순차 입장, 원거리 발사와 탄환의 실제 전투 판정 검사."""
 
 import copy
 import json
@@ -6,7 +6,7 @@ from math import pi
 import unittest
 from unittest.mock import patch
 
-from test_scale import ROOT, capture_png, scene
+from test_scale import ROOT, capture_png, read_canvas, scene
 import pico2d
 import game_framework
 import game_world
@@ -15,7 +15,7 @@ from enemy import MeleeEnemy
 from projectile import Projectile
 from ranged_enemy import RangedEnemy
 from combat_data import ENEMIES
-from wave_data import RANGED
+from wave_data import GATES, RANGED, SETTINGS
 from wave_manager import WaveManager
 from tools.generate_data import validate_waves
 
@@ -47,44 +47,58 @@ class WaveTests(unittest.TestCase):
     def tearDown(self):
         game_world.clear()
 
-    def test_four_simultaneous_gates_every_point_three_seconds(self):
+    def test_iron_gates_open_before_a_feet_first_bridge_crossing(self):
         player, waves = controller()
         waves.load()
-        self.assertEqual((len(waves.enemies), waves.pending), (4, 4))
-        self.assertEqual({gate for _, gate, _ in waves.spawn_log}, {'north', 'south', 'west', 'east'})
+        self.assertEqual((len(waves.enemies), waves.pending), (0, 8))
+        self.assertTrue(all(waves.gate_opening(gate) == 0 for gate in GATES))
+        first, second_row = waves.queue[0], waves.queue[4]
+        self.assertEqual(first.gate['id'], second_row.gate['id'])
+        self.assertGreater(second_row.enemy.y - first.enemy.y, first.enemy.height)
+        self.assertNotIn(first.enemy, game_world.world[1])
+        elapse(waves, .8)
+        self.assertGreater(waves.gate_opening('north'), waves.gate_opening('east'))
+        self.assertTrue(all(entry.visible == 0 for entry in waves.queue))
+        elapse(waves, .32)
+        self.assertEqual(waves.gate_opening('north'), 1)
+        self.assertTrue(0 < first.visible < 1)
+        self.assertEqual(second_row.visible, 0)
+        self.assertLess(first.enemy.y - first.enemy.height / 2, waves.portal_distance)
+        self.assertFalse(waves.enemies)
+        elapse(waves, first.arrival_at - waves.elapsed)
+        self.assertEqual(waves.enemies, [first.enemy])
+        self.assertEqual(first.visible, 1)
+        elapse(waves, 4)
         for enemy in waves.enemies:
             foot_height = player.boundary_height
             foot_y = enemy.y - (enemy.height - foot_height) / 2
             self.assertTrue(player.arena.contains_box(enemy.x, foot_y, enemy.width, foot_height))
-        elapse(waves, .299)
-        self.assertEqual(len(waves.enemies), 4)
-        elapse(waves, .001)
-        self.assertEqual((len(waves.enemies), waves.pending), (8, 0))
-        elapse(waves, .3)
         self.assertEqual((len(waves.enemies), waves.pending), (8, 0))
         self.assertEqual(sum(isinstance(e, RangedEnemy) for e in waves.enemies), 4)
-        for gate in ('north', 'south', 'west', 'east'):
-            self.assertEqual([t for t, g, _ in waves.spawn_log if g == gate], [0, .3])
+        self.assertEqual([gate for _, gate, _ in waves.spawn_log], list(GATES) * 2)
+        gap = SETTINGS['main']['arrival_interval_s']
+        for first_arrival, second_arrival in zip(waves.spawn_log, waves.spawn_log[1:]):
+            self.assertAlmostEqual(second_arrival[0] - first_arrival[0], gap)
 
     def test_count_and_kinds_for_every_wave_and_mode(self):
         for number, count in ((1, 8), (2, 12), (3, 16), (4, 0)):
             for selection in ('all', 'melee', 'ranged'):
                 player, waves = controller()
                 waves.load(number, selection)
-                elapse(waves, 1)
+                elapse(waves, 8)
                 self.assertEqual(len(waves.enemies), count)
                 self.assertEqual(waves.pending, 0)
                 ranged = sum(isinstance(e, RangedEnemy) for e in waves.enemies)
                 self.assertEqual(ranged, 0 if selection == 'melee' else count if selection == 'ranged' else min(count, 4))
                 if number == 1 and selection == 'all':
                     for gate in ('north', 'south', 'east', 'west'):
-                        self.assertEqual([(time, kind) for time, entry, kind in waves.spawn_log
-                                          if entry == gate], [(0, 'melee'), (.3, 'ranged')])
+                        self.assertEqual([kind for _, entry, kind in waves.spawn_log if entry == gate],
+                                         ['melee', 'ranged'])
 
     def test_q_cycles_zero_one_melee_one_ranged_and_clears_old_wave(self):
         player, waves = controller()
         waves.load(3)
-        old = waves.enemies[:]
+        old = [entry.enemy for entry in waves.queue]
         bullet = Projectile('old-single', 10, 0, 0, RANGED['ranged'], player)
         waves.add_projectile(bullet)
         player.combat.hp, player.combat.energy = 70, 20
@@ -110,34 +124,35 @@ class WaveTests(unittest.TestCase):
             self.assertEqual((waves.single_mode, len(waves.enemies)), ('melee', 1))
             waves.handle_key(code)
             self.assertIsNone(waves.single_mode)
-            elapse(waves, 1)
+            elapse(waves, 8)
             expected = {1: 8, 2: 12, 3: 16, 4: 0}[waves.number]
             self.assertEqual(len(waves.enemies), expected)
 
     def test_jump_and_filter_remove_old_objects_and_queue_keep_player(self):
         player, waves = controller()
         waves.load()
+        elapse(waves, 3.5)
         old = waves.enemies[:]
-        old_ids = {enemy.identifier for enemy in old}
+        old_ids = {enemy.identifier for enemy in old} | {entry.enemy.identifier for entry in waves.queue}
         bullet = Projectile('old', 10, 0, 0, RANGED['ranged'], player)
         waves.add_projectile(bullet)
         player.x, player.y = 4, 5
         player.combat.hp, player.combat.energy = 70, 20
         self.assertTrue(waves.handle_key(pico2d.SDLK_9))
         self.assertEqual(waves.selection, 'ranged')
-        self.assertTrue(all(isinstance(e, RangedEnemy) for e in waves.enemies))
-        self.assertFalse(old_ids.intersection(e.identifier for e in waves.enemies))
+        self.assertTrue(all(isinstance(entry.enemy, RangedEnemy) for entry in waves.queue))
+        self.assertFalse(old_ids.intersection(entry.enemy.identifier for entry in waves.queue))
         self.assertFalse(waves.projectiles)
         for layer in game_world.world:
             self.assertNotIn(bullet, layer)
             self.assertTrue(all(e not in layer for e in old))
         self.assertEqual((player.x, player.y, player.combat.hp, player.combat.energy), (4, 5, 70, 20))
         self.assertTrue(waves.handle_key(pico2d.SDLK_3))
-        self.assertEqual((waves.number, waves.selection, waves.pending), (3, 'ranged', 12))
+        self.assertEqual((waves.number, waves.selection, waves.pending), (3, 'ranged', 16))
         waves.handle_key(pico2d.SDLK_8)
-        self.assertTrue(all(type(e) is MeleeEnemy for e in waves.enemies))
+        self.assertTrue(all(type(entry.enemy) is MeleeEnemy for entry in waves.queue))
         waves.handle_key(pico2d.SDLK_0)
-        elapse(waves, 1)
+        elapse(waves, 8)
         self.assertEqual(sum(isinstance(e, RangedEnemy) for e in waves.enemies), 4)
         waves.handle_key(pico2d.SDLK_4)
         elapse(waves, 100)
@@ -149,7 +164,7 @@ class WaveTests(unittest.TestCase):
         for fps in (15, 30, 60, 144):
             player, waves = controller()
             waves.load(3)
-            for _ in range(fps):
+            for _ in range(fps * 8):
                 elapse(waves, 1 / fps)
             if baseline is None:
                 baseline = waves.spawn_log
@@ -163,7 +178,9 @@ class WaveTests(unittest.TestCase):
         for name, field, value in (('waves', 'melee_id', 'missing'), ('waves', 'ranged_id', 'missing'),
                                    ('waves', 'melee_per_gate', -1), ('waves', 'ranged_per_gate', 1.5),
                                    ('ranged', 'character_id', 'missing'), ('ranged', 'attack_interval_s', None),
-                                   ('settings', 'spawn_interval_s', 0),
+                                   ('settings', 'arrival_interval_s', 0),
+                                   ('settings', 'entrance_speed_mps', .1),
+                                   ('settings', 'reveal_m', 8),
                                    ('single_modes', 'enemy_id', 'missing'),
                                    ('single_modes', 'count', 2)):
             data = copy.deepcopy(source)
@@ -251,6 +268,33 @@ class RangedTests(unittest.TestCase):
 
 
 class DebugInputRenderTests(unittest.TestCase):
+    def test_bridge_sprite_reveal_keeps_the_feet_anchored_in_the_renderer(self):
+        pico2d.open_canvas(640, 360)
+        try:
+            play_mode.init()
+            entry = play_mode.waves.queue[0]
+            enemy = entry.enemy
+            enemy.x, enemy.y = 0, 0
+
+            def occupied_rows(reveal):
+                pico2d.clear_canvas()
+                empty = read_canvas(640, 360)
+                entry.visible = reveal
+                entry.draw()
+                frame = read_canvas(640, 360)
+                stride = 640 * 4
+                return [y for y in range(360)
+                        if empty[y * stride:(y + 1) * stride] != frame[y * stride:(y + 1) * stride]]
+
+            self.assertEqual(occupied_rows(0), [])
+            partial, full = occupied_rows(.35), occupied_rows(1)
+            self.assertTrue(partial)
+            self.assertEqual(max(partial), max(full))
+            self.assertGreater(min(partial), min(full) + 10)
+        finally:
+            play_mode.finish()
+            pico2d.close_canvas()
+
     def test_debug_keys_through_game_mode_and_real_render(self):
         pico2d.open_canvas(1280, 720)
         try:
@@ -265,7 +309,7 @@ class DebugInputRenderTests(unittest.TestCase):
 
             press(pico2d.SDLK_3)
             press(pico2d.SDLK_9)
-            game_framework.frame_time = 1
+            game_framework.frame_time = 7
             play_mode.update()
             self.assertEqual((play_mode.waves.number, len(play_mode.enemies)), (3, 16))
             self.assertTrue(all(isinstance(e, RangedEnemy) for e in play_mode.enemies))
@@ -282,7 +326,7 @@ class DebugInputRenderTests(unittest.TestCase):
             self.assertEqual(play_mode.waves.elapsed, before)
             press(pico2d.SDLK_8)
             self.assertTrue(play_mode.paused)
-            self.assertEqual((play_mode.waves.selection, len(play_mode.enemies), play_mode.waves.pending), ('melee', 4, 12))
+            self.assertEqual((play_mode.waves.selection, len(play_mode.enemies), play_mode.waves.pending), ('melee', 0, 16))
             press(pico2d.SDLK_ESCAPE)
             press(pico2d.SDLK_0)
             game_framework.frame_time = 1

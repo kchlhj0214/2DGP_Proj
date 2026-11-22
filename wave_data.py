@@ -1,5 +1,13 @@
 # 자동 생성 파일: data/waves.json을 수정한 뒤 tools/generate_data.py 실행
-SETTINGS = {'main': {'id': 'main', 'spawn_interval_s': 0.3, 'enemy_gap_m': 0.7}}
+SETTINGS = {'main': {'id': 'main',
+          'arrival_interval_s': 0.24,
+          'gate_wait_s': 0.45,
+          'gate_lift_s': 0.55,
+          'portal_offset_m': 7.0,
+          'bridge_inset_m': 5.0,
+          'entrance_speed_mps': 6.0,
+          'reveal_m': 2.3,
+          'enemy_gap_m': 0.7}}
 
 WAVES = {'wave1': {'id': 'wave1',
            'number': 1,
@@ -35,9 +43,9 @@ SINGLE_MODES = {'none': {'id': 'none', 'enemy_id': 'melee', 'count': 0},
  'ranged': {'id': 'ranged', 'enemy_id': 'ranged', 'count': 1}}
 
 GATES = {'north': {'id': 'north', 'x_ratio': 0, 'y_ratio': 1},
+ 'east': {'id': 'east', 'x_ratio': 1, 'y_ratio': 0},
  'south': {'id': 'south', 'x_ratio': 0, 'y_ratio': -1},
- 'west': {'id': 'west', 'x_ratio': -1, 'y_ratio': 0},
- 'east': {'id': 'east', 'x_ratio': 1, 'y_ratio': 0}}
+ 'west': {'id': 'west', 'x_ratio': -1, 'y_ratio': 0}}
 
 RANGED = {'ranged': {'id': 'ranged',
             'character_id': 'player',

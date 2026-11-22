@@ -151,6 +151,8 @@ class PresentationTests(TestCase):
         pico2d.open_canvas(1280, 720)
         try:
             play_mode.init()
+            play_mode.waves.single_mode = 'melee'
+            play_mode.waves.load()
             player, enemy = play_mode.player, play_mode.enemies[0]
             effects = player.effects
 

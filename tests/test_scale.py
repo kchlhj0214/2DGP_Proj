@@ -226,6 +226,7 @@ class RenderTests(unittest.TestCase):
         pico2d.open_canvas(1280, 720)
         try:
             play_mode.init()
+            play_mode.waves.load(4)
             play_mode.render()
             raw = capture_png(ROOT / 'shots/arena-center.png', 1280, 720)
             def shows_centered_sprite(raw):

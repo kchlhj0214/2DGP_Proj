@@ -16,6 +16,7 @@ from wave_manager import WaveManager
 from impact_effects import ImpactEffects
 from sprites import SpriteLibrary
 from patch_autopilot import PatchRound
+from presentation_data import VISUALS
 
 player = arena = camera = None
 focused = True
@@ -30,7 +31,8 @@ def init():
     global player, arena, camera, focused, paused, enemies, projectiles, waves, autopilot
     finish()
     viewport = VIEWPORTS['main']
-    camera = Camera(pico2d.get_canvas_width(), pico2d.get_canvas_height(), viewport['height_m'])
+    camera = Camera(pico2d.get_canvas_width(), pico2d.get_canvas_height(), viewport['height_m'],
+                    VISUALS['arena']['floor_y_ratio'])
     arena = Arena(ARENAS['arena'], viewport, camera)
     arena.load_art()
     player = Player(CHARACTERS['player'], viewport, arena, camera)
@@ -108,8 +110,9 @@ def update():
 
 def render():
     pico2d.clear_canvas()
+    camera.zoom = waves.camera_zoom()
     pico2d.draw_rectangle(0, 0, camera.width_px, camera.height_px,
-                          57, 43, 35, filled=True)
+                          15, 21, 29, filled=True)
     game_world.render(draw_ground_effects)
     player.effects.draw()
     pico2d.update_canvas()
