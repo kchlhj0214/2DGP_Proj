@@ -231,30 +231,68 @@ def gate_frame(width, h, rear=False):
     return frame, [pixels(*point) for point in outline]
 
 
-def gate_view(cell, frame, outline, view):
-    # Face width, projected floor slope across the threshold, and the depth away from the arena.
-    squeeze, slope, depth_x, depth_y = view
-    depth_x, depth_y = pixels(depth_x, depth_y)
+def gate_view(cell, frame, outline, depth):
+    depth_y, = pixels(depth)
     cx, cy = cell[0] / 2, cell[1] - ART['gate_anchor_from_bottom_px']
 
     def project_face(point):
         x, y = point
-        horizontal = x - frame.width / 2
-        return round(cx + horizontal * squeeze), round(cy + y - frame.height + horizontal * slope)
+        return round(cx + x - frame.width / 2), round(cy + y - frame.height)
 
     structure = Image.new('RGBA', cell)
-    if depth_x or depth_y:
+    if depth_y:
         stone = ImageDraw.Draw(structure)
         corners = [project_face(point) for point in outline]
         for first, second in zip(corners, corners[1:] + corners[:1]):
             x, y = first
             u, v = second
             color = (95, 101, 113) if abs(u - x) > abs(v - y) else (45, 53, 67)
-            stone.polygon((first, second, (u + depth_x, v + depth_y), (x + depth_x, y + depth_y)),
+            stone.polygon((first, second, (u, v + depth_y), (x, y + depth_y)),
                           fill=color, outline=(33, 42, 51))
-    inverse = (1 / squeeze, 0, frame.width / 2 - cx / squeeze,
-               -slope / squeeze, 1, frame.height - cy + slope * cx / squeeze)
+    inverse = (1, 0, frame.width / 2 - cx, 0, 1, frame.height - cy)
     return structure, inverse
+
+
+def side_gate_frames(cell, height, frames):
+    """Right-hand arch in profile, with the opening facing left across the bridge."""
+    x = cell[0] / (2 * DENSITY)
+    ground = (cell[1] - ART['gate_anchor_from_bottom_px']) / DENSITY
+    footing = round(ground + BRIDGE * PITCH)
+    track_top = footing - height
+    roof = round(ground - height - 23)
+    masonry = Image.new('RGBA', cell)
+    stone = PixelDraw(masonry)
+
+    # A straight stone housing conceals the face of the arch and the far post.
+    stone.rectangle((x + 2, roof + 5, x + 26, footing), fill=(47, 56, 70), outline=JOINT)
+    for index, y in enumerate(range(roof + 15, footing - 4, 9)):
+        color = BRICK[index % len(BRICK)]
+        stone.rectangle((x + 5, y, x + 24, min(y + 7, footing - 4)), fill=color)
+        stone.line((x + 5, y, x + 24, y), fill=shade(color, 19))
+        if index % 2 == 0:
+            stone.line((x + 13, y + 1, x + 13, min(y + 7, footing - 4)), fill=shade(color, -14))
+
+    stone.rectangle((x - 2, roof + 5, x + 3, footing - 3), fill=(27, 34, 46))
+    stone.line((x + 2, roof + 6, x + 2, footing - 4), fill=(119, 126, 139))
+    stone.rectangle((x, roof + 4, x + 28, roof + 12), fill=(70, 77, 91), outline=JOINT)
+    stone.rectangle((x + 3, roof, x + 25, roof + 5), fill=(103, 110, 122), outline=JOINT)
+    stone.line((x + 4, roof + 1, x + 24, roof + 1), fill=(127, 134, 143))
+    stone.rectangle((x, footing - 4, x + 28, footing), fill=(65, 72, 86), outline=JOINT)
+
+    output = []
+    for phase in range(frames):
+        frame = masonry.copy()
+        drop = height - round(height * phase / (frames - 1))
+        if drop:
+            iron = PixelDraw(frame)
+            tip = track_top + drop
+            iron.rectangle((x - 5, track_top, x, tip), fill=(49, 57, 70), outline=(21, 27, 37))
+            iron.line((x - 4, track_top, x - 4, tip), fill=(133, 137, 146))
+            for y in (tip - 5, tip - 16, tip - 29):
+                if y > track_top:
+                    iron.line((x - 5, y, x, y), fill=(163, 156, 141), width=2)
+        output.append(frame)
+    return output
 
 
 def gate_images():
@@ -265,17 +303,23 @@ def gate_images():
     cell = pixels(120, 162)
     rows = ceil(len(WAVES['gates']) * frames / columns)
     atlas = Image.new('RGBA', (cell[0] * columns, cell[1] * rows))
-    views = {'north': (1, 0, 0, 0), 'east': (.43, .62, 18, -3),
-             'south': (1, 0, 0, -10), 'west': (.43, -.62, -18, -3)}
+    profile = side_gate_frames(cell, height, frames)
     for side, gate in enumerate(WAVES['gates']):
         direction = gate['id']
+        if gate['x_ratio']:
+            for phase, view in enumerate(profile):
+                if direction == 'west':
+                    view = view.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+                row, column = divmod(side * frames + phase, columns)
+                atlas.paste(view, (column * cell[0], row * cell[1]))
+            continue
         frame, outline = gate_frame(width, height, rear=direction == 'south')
-        structure, inverse = gate_view(cell, frame, outline, views[direction])
+        structure, inverse = gate_view(cell, frame, outline, -10 if direction == 'south' else 0)
         for phase in range(frames):
             face = Image.new('RGBA', frame.size)
             lift = round(bars.height * phase / (frames - 1))
             if lift < bars.height:
-                # Cut off the ironwork as it rises behind the lintel, then turn the whole arch.
+                # Cut off the ironwork as it rises behind the lintel.
                 remaining = bars.crop((0, lift, bars.width, bars.height))
                 face.alpha_composite(remaining, ((frame.width - bars.width) // 2,
                                                   frame.height - bars.height))
