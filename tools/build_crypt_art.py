@@ -183,22 +183,6 @@ def bridges(draw, rng):
         slab(PORTAL+7, PORTAL+38, -BRIDGE-3, BRIDGE+3, (26, 30, 40), 1)
 
 
-def graves(draw, image, rng):
-    with Image.open(ROOT / 'art/arena/tombstone.png') as source:
-        mask = source.convert('RGBA').getchannel('A')
-        mask = mask.crop(mask.getbbox()).resize(pixels(14,18), Image.Resampling.NEAREST)
-    for angle in (20, 35, 53, 67, 110, 126, 147, 162, 196, 211, 233, 253, 293, 306, 330, 344):
-        rad = angle * pi / 180
-        x, y = project((RADIUS+38)*cos(rad), (RADIUS+38)*sin(rad))
-        draw.ellipse((x-10, y-4, x+10, y+4), fill=(29, 42, 48))
-        left, top = pixels(x-7, y-17)
-        image.paste(rng.choice(BRICK), (left, top, left + mask.width, top + mask.height), mask)
-        draw.line((x-5, y, x+5, y), fill=(114, 118, 117))
-        if angle % 2 == 0:
-            draw.line((x+12, y-2, x+20, y+1), fill=(136, 132, 116), width=2)
-            draw.point((x+12, y-3), fill=(158, 152, 134))
-
-
 def gate_images():
     h = round(ART['gate_height_m'] * UNIT)
     width = 2 * BRIDGE + 6
@@ -251,7 +235,6 @@ def build():
     crest(draw)
     walls(draw, rng)
     bridges(draw, rng)
-    graves(draw, image, rng)
     image.save(output, optimize=True)
     gate_images()
 
