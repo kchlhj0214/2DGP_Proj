@@ -1,7 +1,7 @@
 # 자동 생성 파일: data/combat.json을 수정한 뒤 tools/generate_data.py 실행
 SYSTEMS = {'main': {'id': 'main',
           'player_hp': 100,
-          'heal_per_kill': 10,
+          'heal_per_kill': 5,
           'guard_kmph': 14,
           'input_lock_s': 1,
           'parry_move_lock_s': 0.5,

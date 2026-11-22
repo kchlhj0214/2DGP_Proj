@@ -62,7 +62,7 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(combat.state, 'free')
 
     def test_each_enemy_killed_by_the_beam_restores_health_up_to_the_cap(self):
-        for initial, expected in ((55, 75), (95, 100), (100, 100)):
+        for initial, expected in ((55, 65), (97, 100), (100, 100)):
             with self.subTest(initial_hp=initial):
                 player, melee = actor(4)
                 ranged = RangedEnemy('ranged', RANGED['ranged'], 8, 0, player, lambda _: None)
