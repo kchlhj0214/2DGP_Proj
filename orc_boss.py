@@ -214,18 +214,18 @@ class OrcBoss(MeleeEnemy):
         if self.state == 'windup':
             return self.pattern, min(3, 4 * self.age / ATTACKS[self.pattern]['windup_s'])
         if self.state == 'charge':
-            return 'charge', 4 + int(self.visual_time * 13) % 4
+            return 'charge', 4 + int(self.visual_time * 18) % 8
         if self.state == 'swing':
-            return 'swing', 4 + 3 * min(1.0, self.age / SWING['swing_s'])
+            return 'swing', min(7, 4 + 4 * self.age / SWING['swing_s'])
         if self.state == 'rocks':
-            return 'slam', min(7, 4 + self.age * 11)
+            return 'slam', min(7, 4 + self.age * 16)
         if self.state == 'recovery':
             if self.pattern == 'charge':
                 action = 'stagger' if self.staggered else 'recover'
                 return action, 7 * self.age / CHARGE['recovery_s']
             progress = self.age / ATTACKS[self.pattern]['recovery_s']
-            return self.pattern, 7 if progress < .45 else 1 if progress < .7 else 0
-        return ('walk' if self.moving else 'idle'), None
+            return self.pattern, min(11, 8 + 4 * progress)
+        return ('walk', int(self.visual_time * 10) % 8) if self.moving else ('idle', None)
 
     def draw_warning(self):
         camera = self.player.camera

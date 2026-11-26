@@ -8,6 +8,7 @@ from test_scale import scene
 from test_waves import controller, elapse
 from orc_boss import BOSS, CHARGE, ROCK, SLAM, SWING, OrcBoss
 from projectile import Projectile
+from sprites import CLIPS
 from wave_data import RANGED
 import game_world
 
@@ -32,6 +33,24 @@ def defend(player, method):
 class BossTests(TestCase):
     def tearDown(self):
         game_world.clear()
+
+    def test_render_plays_the_full_charge_stride_and_attack_follow_through(self):
+        _, boss = encounter()
+        boss.state = 'charge'
+        for step in range(8):
+            boss.visual_time = (step + .5) / 18
+            self.assertEqual(boss.pose(), ('charge', 4 + step))
+        self.assertEqual(CLIPS['boss', 'charge']['frames'], 12)
+        for action, active in (('slam', 'rocks'), ('swing', 'swing')):
+            with self.subTest(action=action):
+                boss.pattern = action
+                boss.state, boss.age = 'windup', 0
+                self.assertEqual(boss.pose(), (action, 0))
+                boss.state = active
+                self.assertEqual(boss.pose(), (action, 4))
+                boss.recover()
+                self.assertEqual(boss.pose(), (action, 8))
+                self.assertEqual(CLIPS['boss', action]['frames'], 12)
 
     def test_charge_can_miss_get_parried_or_chip_a_guard(self):
         for method in ('dodge', 'hit', 'parry', 'guard', 'rear-parry', 'rear-guard'):

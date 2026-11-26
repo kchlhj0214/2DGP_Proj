@@ -1,0 +1,13 @@
+{
+  "walk": {"drawing": "1adc326e-a065-4492-92d2-9a93ff58481e", "cell_px": 384, "offset": [64, 36]},
+  "charge": {"drawing": "6c347b23-9d9b-4ad3-9cb4-c93db3150605", "cell_px": 384, "offset": [64, 36],
+    "directions": {
+      "east": "4fe28593-dcf2-4dac-bb19-972aaec81ef3", "south-east": "4fe28593-dcf2-4dac-bb19-972aaec81ef3",
+      "west": "4fe28593-dcf2-4dac-bb19-972aaec81ef3", "south-west": "4fe28593-dcf2-4dac-bb19-972aaec81ef3"
+    }},
+  "slam": {"drawing": "eed6da51-089e-44e9-b0ce-1ccf978e3208", "cell_px": 384, "offset": [64, 36]},
+  "swing": {"drawing": "304b8697-1566-4dcb-830b-3621249c06f0", "cell_px": 384, "offset": [64, 36]},
+  "stagger": {"drawing": "23b6440b-9399-452a-a906-c17a82604b1b", "cell_px": 384, "offset": [64, 36]},
+  "recover": {"drawing": "1e0cad90-7339-462a-a9f7-0c0a15dd4b23", "cell_px": 384, "offset": [64, 36]},
+  "collapse": {"drawing": "53d0a2ec-5aac-45f8-81ec-35b08d64930e", "cell_px": 384, "offset": [64, 36]}
+}

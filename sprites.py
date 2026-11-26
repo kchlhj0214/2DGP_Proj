@@ -58,7 +58,8 @@ class SpriteLibrary:
         source = (ROOT / SETTINGS['asset_dir'] / f'{actor}-{action}-flash.png'
                   if flash else ATLAS_PATH.parent / clip['file'])
         image = pico2d.load_image(str(source))
-        if (image.w, image.h) != (self.cell * clip['frames'], self.cell * 8):
+        cell = clip.get('cell_px', self.cell)
+        if (image.w, image.h) != (cell * clip['frames'], cell * 8):
             raise ValueError(f'스프라이트 시트 크기가 다릅니다: {actor}/{action}')
         self.clips[actor, action, flash] = image
         return image
@@ -66,35 +67,37 @@ class SpriteLibrary:
     def draw(self, actor, action, owner, camera, angle, elapsed=0.0, frame=None, flash=False,
              reveal=1.0, clip_at_x=None, clip_above_y=None):
         clip = CLIPS[actor, action]
+        cell = clip.get('cell_px', self.cell)
+        anchor = clip.get('origin_px', self.anchor)
         index = frame_index(clip, elapsed, frame)
         foot_y = owner.y - owner.height / 2
         x, y = camera.to_screen(owner.x, foot_y)
         meters_per_pixel = owner.height / self.body_pixels
         scale = meters_per_pixel * camera.pixels_per_meter
-        half = self.cell / 2
-        x += (half - self.anchor[0]) * scale
-        y += (self.anchor[1] - half) * scale
-        bottom = (7 - direction(angle)) * self.cell
+        half = cell / 2
+        x += (half - anchor[0]) * scale
+        y += (anchor[1] - half) * scale
+        bottom = (7 - direction(angle)) * cell
         image = self.clips.get((actor, action, bool(flash)))
         if image is None:
             image = self.load_clip(clip, bool(flash))
         if actor == 'hero' and flash:
             color = (250, 55, 52) if flash == 'red' else (255, 255, 255)
             pico2d.SDL_SetTextureColorMod(image.texture, *color)
-        left, width, height = 0, self.cell, self.cell
+        left, width, height = 0, cell, cell
         if clip_at_x is not None:
             edge, inward = clip_at_x
-            column = self.anchor[0] + (edge - owner.x) / meters_per_pixel
+            column = anchor[0] + (edge - owner.x) / meters_per_pixel
             if inward > 0:
                 left = max(0, ceil(column))
                 width -= left
             else:
-                width = min(self.cell, floor(column))
+                width = min(cell, floor(column))
             if width <= 0:
                 return
             x += (left + width / 2 - half) * scale
         elif clip_above_y is not None:
-            foot_padding = self.cell - self.anchor[1]
+            foot_padding = cell - anchor[1]
             projected = (clip_above_y - foot_y) * camera.floor_y_ratio
             hidden = max(0, ceil(foot_padding + projected / meters_per_pixel))
             if hidden >= height:
@@ -104,13 +107,13 @@ class SpriteLibrary:
             y += hidden * scale / 2
         elif reveal < 1.0:
             # Skip the transparent padding beneath the feet; expose rows upwards from the foot anchor.
-            rows = round(self.anchor[1] * reveal)
+            rows = round(anchor[1] * reveal)
             if rows <= 0:
                 return
-            foot_padding = self.cell - self.anchor[1]
+            foot_padding = cell - anchor[1]
             height = rows + foot_padding
-            y -= (self.cell - height) * scale / 2
-        image.clip_draw(index * self.cell + left, bottom, width, height, x, y, width * scale, height * scale)
+            y -= (cell - height) * scale / 2
+        image.clip_draw(index * cell + left, bottom, width, height, x, y, width * scale, height * scale)
 
     def draw_projectile(self, projectile, camera):
         x, y = camera.to_screen(projectile.x, projectile.y)

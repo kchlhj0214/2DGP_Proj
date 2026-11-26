@@ -158,6 +158,11 @@ def validate_presentation(data):
         if action not in expected.get(actor,set()) or type(clip['frames']) is not int or clip['frames'] < 1:
             raise ValueError(f'잘못된 스프라이트 참조: {actor}/{action}')
         expected[actor].remove(action)
+        cell = clip.get('cell_px', atlas['cell_px'])
+        origin = clip.get('origin_px', atlas['origin_px'])
+        if (type(cell) is not int or cell <= 0 or len(origin) != 2
+                or any(type(axis) is not int or not 0 <= axis < cell for axis in origin)):
+            raise ValueError(f'잘못된 스프라이트 크기 또는 기준점: {actor}/{action}')
         if actor == 'hero' and action in ('guard','guard_walk'):
             anchors = clip.get('shield_px', [])
             if (len(anchors) != 8 or any(len(row) != clip['frames'] for row in anchors)

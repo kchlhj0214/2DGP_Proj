@@ -1,119 +1,155 @@
-"""Bake the eight PixelLab boss rotations and optional PixelLab attack frames."""
+"""Import reviewed PixelLab Workbench sheets into the game's boss atlas."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
+from urllib.request import Request, urlopen
 
-from PIL import Image, ImageChops, ImageDraw
 import numpy as np
+from PIL import Image, ImageOps
 
-from tools.build_pixellab_motion import pixel_regions
-from tools.generate_data import ROOT
+from tools.build_pixellab_motion import close_joint_seam, pixel_regions
+from tools.pixellab_boss_scene import DIRECTIONS, RIG, ROOT, pose, view_joints
 
-DATA = json.loads((ROOT / 'data/boss_motion.json').read_text(encoding='utf-8'))
-SIZE = 256
-ANCHOR = 220
-
-
-def rotation_layer(image, row):
-    mask = Image.new('L', image.size)
-    ImageDraw.Draw(mask).polygon(row['arm'], fill=255)
-    arm = image.copy()
-    arm.putalpha(ImageChops.multiply(image.getchannel('A'), mask))
-    return arm, mask
+SOURCE = ROOT / 'art/boss/pixellab'
+SLAM_PLATES = ROOT / 'art/boss/animations/slam'
+ASSETS = ROOT / 'assets/pixellab-sprites'
+MANIFEST = ROOT / 'art/boss/workbench.json'
+CELL, ORIGIN = 320, (160, 244)
+SCALE, COLUMNS = .86, 4
 
 
-def normalize(image, foot_y):
-    scale = 0.86
-    out = Image.new('RGBA', (SIZE, SIZE))
-    out.paste(image.resize((round(SIZE * scale), round(SIZE * scale)), Image.Resampling.NEAREST),
-              (round(SIZE * (1 - scale) / 2), ANCHOR - round(foot_y * scale)))
-    return out
+def fetch_sheet(export, direction, path):
+    if path.is_file():
+        return
+    drawing = drawing_for(export, direction)
+    url = f'https://api.pixellab.ai/mcp/pixel-tools/{drawing}/assets/{direction}/full.png'
+    request = Request(url, headers={'User-Agent': 'Shield Attack art builder'})
+    with urlopen(request, timeout=40) as response:
+        png = response.read()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(png)
 
 
-def render_pose(image, arm, mask, row, pose, foot_y):
-    lean, bend, rotation = pose
-    turn = row['turn']
-    body = image.copy()
-    if rotation and (row['id'] not in ('NW', 'W') or abs(rotation) > 30):
-        body.putalpha(ImageChops.subtract(image.getchannel('A'), mask))
-        angle = turn * -rotation
-        weapon = arm.rotate(angle, Image.Resampling.NEAREST, center=tuple(row['shoulder']))
-        # Retain a small overlap at the shoulder so the separated arm stays attached.
-        x, y = row['shoulder']
-        joint = (x - 12, y - 10, x + 13, y + 13)
-        body.alpha_composite(image.crop(joint), joint[:2])
-        body.alpha_composite(weapon)
-    slope = turn * lean / 160
-    squash = (160 - bend) / 160
-    moved = body.transform((SIZE, SIZE), Image.Transform.AFFINE,
-                           (1, slope / squash, -slope * foot_y / squash,
-                            0, 1 / squash, foot_y * (1 - 1 / squash)),
-                           Image.Resampling.NEAREST)
-    return normalize(moved, foot_y)
+def drawing_for(export, direction):
+    return export.get('directions', {}).get(direction, export['drawing'])
 
 
-def clean_frame(frame):
+def export_path(exports, export, direction):
+    return exports / drawing_for(export, direction) / f'{direction}.png'
+
+
+def repair_joints(frame, view, row, reflected):
+    joints = view_joints(view)
+    motion = dict(zip(RIG['columns'], row, strict=True))
+    moves = pose(view, motion, joints)
+    hinges = [('weapon_arm', joints[1], 12, 2), ('grip', joints[2], 12, 2)]
+    hinges.extend((f'thigh_{index}', complex(*hip), 18, 4)
+                  for index, (hip, _, _, _) in enumerate(view['legs']))
+    for node, rest, radius, gap in hinges:
+        center = rest + complex(*moves[node]['at'])
+        if reflected:
+            center = complex(frame.width - 1 - center.real, center.imag)
+        close_joint_seam(frame, center, radius=radius, gap=gap)
+
+
+def normalize(frame, offset, source_foot, cell, origin):
     alpha = np.array(frame.getchannel('A'))
     regions = sorted(pixel_regions(alpha > 0), key=len, reverse=True)
     for region in regions[1:]:
-        y, x = zip(*region)
-        alpha[y, x] = 0
+        if len(region) <= 45:
+            y, x = zip(*region)
+            alpha[y, x] = 0
     frame.putalpha(Image.fromarray(alpha))
+    bounds = frame.getbbox()
+    if bounds is None or min(bounds[:2]) <= 0 or max(bounds[2:]) >= frame.width:
+        raise ValueError('PixelLab export contains an empty or clipped frame')
+    ox, oy = offset
+    anchor_x, anchor_y = ox + 128, oy + source_foot
+    target = (origin[0] + round((bounds[0] - anchor_x) * SCALE),
+              origin[1] + round((bounds[1] - anchor_y) * SCALE))
+    frame = frame.crop(bounds)
+    frame = frame.resize(tuple(round(length * SCALE) for length in frame.size), Image.Resampling.NEAREST)
+    if min(target) <= 0 or max(a + b for a, b in zip(target, frame.size)) >= cell:
+        raise ValueError('Boss frame needs more room in the in-game atlas')
+    out = Image.new('RGBA', (cell, cell))
+    out.paste(frame, target)
+    return out
+
+
+def slam_plate(direction, index):
+    # Preserve the original two-handed PixelLab strike plates where available.
+    view = {'south': 'S', 'east': 'E', 'west': 'E'}.get(direction)
+    if view is None or index >= 8:
+        return None
+    if direction == 'south' and index >= 4:
+        index = 7
+    with Image.open(SLAM_PLATES / view / f'{index}.png') as sprite:
+        frame = sprite.convert('RGBA')
+    if direction == 'west':
+        frame = ImageOps.mirror(frame)
     return frame
 
 
-def build(source, destination, animated):
+def build(exports, destination, fetch):
+    metadata = json.loads(MANIFEST.read_text(encoding='utf-8'))
+    if set(metadata) != set(RIG['clips']):
+        raise ValueError('A boss clip is missing a PixelLab export')
     atlas_path = destination / 'atlas.json'
     atlas = json.loads(atlas_path.read_text(encoding='utf-8'))
-    directions = atlas['directions']
-    rows = DATA['rotations']
-    if [row['id'] for row in rows] != directions or atlas['origin_px'] != [128, ANCHOR]:
-        raise ValueError('Boss rotations and atlas do not share directions and anchor')
-    clips = [clip for clip in atlas['clips'] if clip['actor'] != 'boss']
-    rigs = {}
-    for row in rows:
-        image = Image.open(source / (row['file'] + '.png')).convert('RGBA')
-        arm, mask = rotation_layer(image, row)
-        rigs[row['id']] = (image, arm, mask, row, image.getbbox()[3] - 1)
-    for hidden, visible in (('W', 'E'), ('NW', 'NE')):
-        image, _, mask, row, foot_y = rigs[hidden]
-        _, arm, _, donor, _ = rigs[visible]
-        x, y = row['shoulder']
-        dx, dy = donor['shoulder']
-        # Reveal the matching club arm from behind the cape for the larger swings.
-        arm = ImageChops.offset(arm.transpose(Image.Transpose.FLIP_LEFT_RIGHT), x - (SIZE - 1 - dx), y - dy)
-        rigs[hidden] = (image, arm, mask, row, foot_y)
-    for clip in DATA['poses']:
-        action, frames = clip['id'], clip['frames']
+    atlas['clips'] = [clip for clip in atlas['clips']
+                      if clip['actor'] != 'boss' or clip['action'] == 'idle']
+    feet = {}
+    views = {view['id']: view for view in RIG['views']}
+    for direction in DIRECTIONS:
+        reference = RIG['mirrors'].get(direction, direction)
+        with Image.open(SOURCE / f'{reference}.png') as sprite:
+            feet[direction] = sprite.convert('RGBA').getbbox()[3] - 1
+    if fetch:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            downloads = [pool.submit(fetch_sheet, info, direction, export_path(exports, info, direction))
+                         for info in metadata.values() for direction in DIRECTIONS]
+            for download in downloads:
+                download.result()
+    for action, rows in RIG['clips'].items():
+        export = metadata[action]
+        source_cell, offset = export['cell_px'], export['offset']
+        count = len(rows)
+        cell, origin = (352, (176, 244)) if action == 'collapse' else (CELL, ORIGIN)
+        sheet = Image.new('RGBA', (cell * count, cell * len(DIRECTIONS)))
+        for row, direction in enumerate(DIRECTIONS):
+            reference = RIG['mirrors'].get(direction, direction)
+            with Image.open(export_path(exports, export, direction)) as source:
+                image = source.convert('RGBA')
+            if image.size != (COLUMNS * source_cell, (count + COLUMNS - 1) // COLUMNS * source_cell):
+                raise ValueError(f'PixelLab sheet does not match {action}/{direction}')
+            for index in range(count):
+                x, y = index % COLUMNS * source_cell, index // COLUMNS * source_cell
+                source_frame = slam_plate(direction, index) if action == 'slam' else None
+                source_offset = (0, 0) if source_frame is not None else offset
+                if source_frame is None:
+                    source_frame = image.crop((x, y, x + source_cell, y + source_cell))
+                    repair_joints(source_frame, views[reference], rows[index], direction != reference)
+                try:
+                    frame = normalize(source_frame, source_offset, feet[direction], cell, origin)
+                except ValueError as error:
+                    raise ValueError(f'{action}/{direction}/{index + 1}: {error}') from error
+                sheet.paste(frame, (index * cell, row * cell))
         name = f'boss-{action}'
-        sheet = Image.new('RGBA', (SIZE * len(frames), SIZE * len(rows)))
-        for y, rig in enumerate(rigs.values()):
-            for x, pose in enumerate(frames):
-                custom = animated / action / rig[3]['id'] / f'{x}.png'
-                if custom.is_file():
-                    frame = normalize(Image.open(custom).convert('RGBA'), rig[4])
-                else:
-                    frame = render_pose(*rig[:4], pose, rig[4])
-                frame = clean_frame(frame)
-                box = frame.getbbox()
-                if not box or min(box[:2]) == 0 or max(box[2:]) == SIZE:
-                    raise ValueError(f'Empty or clipped boss sprite: {action}, {directions[y]}, frame {x}')
-                sheet.paste(frame, (x * SIZE, y * SIZE))
         sheet.save(destination / f'{name}.png', optimize=True)
         flash = Image.new('RGBA', sheet.size, 'white')
         flash.putalpha(sheet.getchannel('A'))
         flash.save(destination / f'{name}-flash.png', optimize=True)
-        clips.append({'actor': 'boss', 'action': action, 'frames': len(frames),
-                      'loop': clip['loop'], 'file': f'{name}.png'})
-    atlas['clips'] = clips
+        atlas['clips'].append({'actor': 'boss', 'action': action, 'frames': count, 'loop': action == 'walk',
+                               'file': f'{name}.png', 'cell_px': cell, 'origin_px': list(origin)})
     atlas_path.write_text(json.dumps(atlas, indent=2) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path, default=ROOT / 'art/boss/pixellab')
-    parser.add_argument('--output', type=Path, default=ROOT / 'assets/pixellab-sprites')
-    parser.add_argument('--animated', type=Path, default=ROOT / 'art/boss/animations')
+    parser.add_argument('--exports', type=Path, default=ROOT / '.scratch/pixellab-boss')
+    parser.add_argument('--output', type=Path, default=ASSETS)
+    parser.add_argument('--fetch', action='store_true', help='Download the reviewed sheets from PixelLab')
     args = parser.parse_args()
-    build(args.source, args.output, args.animated)
+    build(args.exports, args.output, args.fetch)

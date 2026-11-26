@@ -2361,49 +2361,84 @@
       "action": "walk",
       "frames": 8,
       "loop": true,
-      "file": "boss-walk.png"
+      "file": "boss-walk.png",
+      "cell_px": 320,
+      "origin_px": [
+        160,
+        244
+      ]
     },
     {
       "actor": "boss",
       "action": "charge",
-      "frames": 8,
+      "frames": 12,
       "loop": false,
-      "file": "boss-charge.png"
+      "file": "boss-charge.png",
+      "cell_px": 320,
+      "origin_px": [
+        160,
+        244
+      ]
     },
     {
       "actor": "boss",
       "action": "slam",
-      "frames": 8,
+      "frames": 12,
       "loop": false,
-      "file": "boss-slam.png"
+      "file": "boss-slam.png",
+      "cell_px": 320,
+      "origin_px": [
+        160,
+        244
+      ]
     },
     {
       "actor": "boss",
       "action": "swing",
-      "frames": 8,
+      "frames": 12,
       "loop": false,
-      "file": "boss-swing.png"
+      "file": "boss-swing.png",
+      "cell_px": 320,
+      "origin_px": [
+        160,
+        244
+      ]
     },
     {
       "actor": "boss",
       "action": "stagger",
       "frames": 8,
       "loop": false,
-      "file": "boss-stagger.png"
+      "file": "boss-stagger.png",
+      "cell_px": 320,
+      "origin_px": [
+        160,
+        244
+      ]
     },
     {
       "actor": "boss",
       "action": "recover",
       "frames": 8,
       "loop": false,
-      "file": "boss-recover.png"
+      "file": "boss-recover.png",
+      "cell_px": 320,
+      "origin_px": [
+        160,
+        244
+      ]
     },
     {
       "actor": "boss",
       "action": "collapse",
       "frames": 8,
       "loop": false,
-      "file": "boss-collapse.png"
+      "file": "boss-collapse.png",
+      "cell_px": 352,
+      "origin_px": [
+        176,
+        244
+      ]
     }
   ]
 }
