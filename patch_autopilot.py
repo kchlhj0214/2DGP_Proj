@@ -5,15 +5,18 @@ from math import pi
 import pico2d
 
 from enemy_spacing import is_free
+from orc_boss import CHARGE, ROCK
 from projectile import Projectile
 from wave_data import GATES, RANGED, SETTINGS
 
 
 class PatchRound:
-    checks = ('gates-open-and-enemies-cross', 'arena-loads', 'parry-moves-enemy',
+    stages = ('arena-and-entrances', 'arena-and-entrances', 'parry-moves-enemy',
               'beam-three-pulses-heals', 'ranged-fires',
               'player-hit-flashes', 'enemies-stay-apart', 'walking-guard-blocks-side',
-              'parry-reaches-incoming-bolt', 'wave-clears-to-next', 'wave-timeout-adds-next')
+              'parry-reaches-incoming-bolt', 'waves-advance-and-carry', 'waves-advance-and-carry',
+              'boss-charge-stops-on-parry', 'boss-slam-drops-rocks', 'boss-sweep-shoves-guard')
+    checks = tuple(dict.fromkeys(stages))
 
     def __init__(self, mode, report):
         self.mode = mode
@@ -31,11 +34,16 @@ class PatchRound:
         self.gates_started_closed = all(mode.waves.gate_opening(gate) == 0 for gate in GATES)
         self.started_wave_check = False
         self.carry_enemies = ()
+        self.boss_attack_started = False
+        self.boss_hit_seen = False
+        self.boss_hp_before_attack = 0
 
     def write(self, result, detail=''):
-        with self.report.open('a', encoding='utf-8') as report:
-            report.write(f'{result} {self.checks[self.index]}{detail}\n')
-        self.index += 1
+        name = self.stages[self.index]
+        if result == 'fail' or name not in self.stages[self.index + 1:]:
+            with self.report.open('a', encoding='utf-8') as report:
+                report.write(f'{result} {name}{detail}\n')
+        self.index = len(self.stages) if result == 'fail' else self.index + 1
         self.age = 0.0
 
     def spawn(self, kind, distance):
@@ -46,25 +54,24 @@ class PatchRound:
         self.enemy.x, self.enemy.y = player.constrain_position(player.x + distance, player.y)
 
     def update(self, dt):
-        if self.index >= len(self.checks):
+        if self.index >= len(self.stages):
             return
         self.age += dt
         player = self.mode.player
         combat = player.combat
         if self.age > 8:
             self.write('fail', ': expected scene result did not occur')
-            self.index = len(self.checks)
         elif self.index == 0:
             waves = self.mode.waves
             shown = [entry for entry in waves.queue if entry.visible > 0]
             if any(waves.gate_opening(entry.gate['id']) < 1 for entry in shown):
                 self.write('fail', ': an enemy appeared in front of a closed gate')
-                self.index = len(self.checks)
                 return
             self.saw_partial_entry |= any(0 < entry.visible < 1 for entry in shown)
             if (not waves.pending and self.saw_partial_entry and self.gates_started_closed
                     and [gate for _, gate, _ in waves.spawn_log] == list(GATES) * 2):
-                waves.load(4)
+                waves.single_mode = 'none'
+                waves.load()
                 player.y = 23.0
                 player.pressed_keys.add(pico2d.SDLK_w)
                 self.write('pass')
@@ -111,7 +118,8 @@ class PatchRound:
             if any(not is_free(enemy, enemy.x, enemy.y) for enemy in enemies):
                 self.write('fail', ': enemies moved inside the spacing gap')
             elif self.age >= 2 and len(enemies) == 16:
-                self.mode.waves.load(4, 'all')
+                self.mode.waves.single_mode = 'none'
+                self.mode.waves.load()
                 combat.aim = -pi / 2
                 combat.right_down()
                 player.pressed_keys.add(pico2d.SDLK_d)
@@ -163,4 +171,48 @@ class PatchRound:
             elif (waves.number == 3 and limit - .1 < waves.remaining_s <= limit
                   and self.carry_enemies and all(enemy in self.mode.enemies for enemy in self.carry_enemies)
                   and waves.pending == 16 and combat.hp > 0):
+                waves.load(4, 'all')
+                player.x, player.y = 6.0, 0.0
+                player.pressed_keys.clear()
+                combat.aim, combat.energy = pi, 0
+                combat.hp = combat.settings['player_hp']
+                combat.right_up()
                 self.write('pass')
+        elif self.index >= 11:
+            self.boss_round()
+
+    def boss_round(self):
+        player, boss = self.mode.player, self.mode.waves.boss
+        if boss is None:
+            return
+        combat = player.combat
+        if self.index == 11:
+            if boss.state == 'windup' and boss.age >= CHARGE['windup_s'] - .12:
+                combat.right_down()
+            if boss.staggered and boss.state == 'recovery' and combat.energy == combat.settings['energy_max'] / 2:
+                combat.right_up()
+                self.write('pass')
+        elif self.index == 12:
+            if combat.state == 'free':
+                combat.right_down()
+            if boss.state == 'idle' and combat.state == 'guard' and not self.boss_attack_started:
+                self.boss_attack_started = True
+                self.boss_hp_before_attack = combat.hp
+                boss.begin('slam')
+            if boss.state == 'rocks':
+                self.boss_hit_seen |= len(boss.rocks) == ROCK['count'] and combat.hp < self.boss_hp_before_attack
+            if boss.pattern == 'slam' and boss.state == 'recovery' and self.boss_hit_seen:
+                self.boss_attack_started = False
+                self.write('pass')
+        elif self.index == 13:
+            if boss.state == 'idle' and not self.boss_attack_started:
+                self.boss_attack_started = True
+                player.x, player.y = boss.x + 6, boss.y
+                self.target_x = player.x
+                self.boss_hp_before_attack = combat.hp
+                boss.begin('swing')
+            if self.boss_attack_started and player.x - self.target_x >= self.mode.arena.radius / 2 - .01:
+                if combat.hp == self.boss_hp_before_attack:
+                    self.write('pass')
+                else:
+                    self.write('fail', ': guarding the swing should prevent all HP loss')
