@@ -8,6 +8,8 @@ import game_framework
 import game_world
 from combat_data import ENEMIES
 from enemy import MeleeEnemy
+from geometry import circle_points, draw_boss_warning
+from orc_boss import BOSS, OrcBoss
 from presentation_data import VISUALS
 from ranged_enemy import RangedEnemy
 from wave_data import GATES, MODES, RANGED, SETTINGS, SINGLE_MODES, WAVES
@@ -15,6 +17,7 @@ from enemy_spacing import is_free, spawn_position
 
 
 ENTRY = SETTINGS['main']
+BOSS_WAVE = WAVES[BOSS['wave_id']]['number']
 
 
 @dataclass
@@ -77,6 +80,15 @@ class WaveManager:
         self.spawn_log = []
         self.gate_lifts = {}
         self.overview_until = 0.0
+        self.boss = None
+
+    @property
+    def boss_pending(self):
+        return self.number == BOSS_WAVE and self.single_mode is None and self.boss is None
+
+    @property
+    def won(self):
+        return self.boss is not None and self.boss.hp <= 0
 
     @property
     def portal_distance(self):
@@ -141,6 +153,7 @@ class WaveManager:
             self.queue.clear()
             self.gate_lifts.clear()
         self.spawn_log.clear()
+        self.boss = None
         self.overview_until = 0.0
         self.elapsed = 0.0
         self.generation += 1
@@ -231,8 +244,20 @@ class WaveManager:
                 self.activate(entry.enemy, entry.gate, entry.kind, entry.arrival_at, entry.landing)
             for entry in self.queue:
                 entry.advance(self.elapsed, self.portal_distance, self.choose_landing)
+            if self.boss_pending and self.elapsed + 1e-9 >= BOSS['arrival_s']:
+                self.boss = OrcBoss(f'{self.generation}:boss', self.player)
+                self.enemies.append(self.boss)
+                game_world.add_object(self.boss, 1)
 
     def resolve_step(self):
+        if self.won:
+            for projectile in self.projectiles:
+                game_world.remove_object(projectile)
+            self.projectiles.clear()
+            self.queue.clear()
+            self.player.combat.beam = None
+            self.player.combat.state = 'free'
+            return
         if self.time_limit_s is None or self.player.combat.hp <= 0:
             return
         cleared = not self.queue and not any(enemy.hp > 0 for enemy in self.enemies)
@@ -245,3 +270,6 @@ class WaveManager:
         for entry in sorted(self.queue, key=lambda item: item.enemy.y, reverse=True):
             entry.draw(portal_distance)
         self.player.arena.draw_gates(self, foreground=True)
+        if self.boss_pending and self.player.combat.hp > 0:
+            strength = 0.35 + 0.55 * self.elapsed / BOSS['arrival_s']
+            draw_boss_warning(circle_points(0, 0, self.player.height), self.player.camera, strength)

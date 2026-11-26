@@ -49,13 +49,23 @@ class CombatHUD:
         self.font.draw(22, 47, 'WASD 이동 | 우클릭 패링/방어 | 좌클릭 광선 | R 재시작 | ESC 일시정지', (205, 218, 228))
         self.font.draw(22, 23, '1~4 웨이브 | 8 근접만 | 9 원거리만 | 0 혼합 | Q 적 없음/근접 1/원거리 1', (237, 208, 146))
         x, y = camera.width_px / 2, camera.height_px / 2
+        boss = mode.waves.boss
+        if boss and boss.hp > 0:
+            bar_left, bar_right = x - 155, x + 155
+            pico2d.draw_rectangle(bar_left, 76, bar_right, 107, 27, 23, 30, filled=True)
+            self.font.draw(x - 58, 97, '언데드 오크', (255, 205, 163))
+            pico2d.draw_rectangle(bar_left + 5, 80, bar_right - 5, 88, 81, 32, 37, filled=True)
+            pico2d.draw_rectangle(bar_left + 5, 80, bar_left + 5 + 300 * boss.hp / boss.data['hp'],
+                                  88, 204, 68, 67, filled=True)
         if combat.time < combat.message_until:
             self.font.draw(x - 35, y + 58, combat.message, (248, 228, 142))
         if mode.paused:
             self.font.draw(x - 100, y + 96, '일시정지 · ESC로 계속', (245, 236, 201))
         elif combat.hp <= 0:
             self.font.draw(x - 98, y + 96, '쓰러졌습니다 · R로 재시작', (255, 172, 163))
+        elif mode.waves.won:
+            self.font.draw(x - 103, y + 96, '보스 처치 · R로 재시작', (224, 246, 157))
         elif mode.waves.single_mode is not None and remaining == 0:
             self.font.draw(x - 118, y + 96, 'Q로 단일 적 테스트 모드 전환', (171, 247, 195))
-        elif mode.waves.number == 4 and mode.waves.single_mode is None and remaining == mode.waves.pending == 0:
-            self.font.draw(x - 112, y + 96, '4웨이브 대기 · 보스 미구현', (171, 247, 195))
+        elif mode.waves.boss_pending:
+            self.font.draw(x - 66, y + 96, '보스 등장', (255, 153, 144))

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pico2d
 
+from boss_data import ROCKS
 from presentation_data import VISUALS
 
 ROOT = Path(__file__).resolve().parent
@@ -45,21 +46,26 @@ class SpriteLibrary:
         self.anchor = ATLAS['origin_px']
         self.body_pixels = SETTINGS['body_height_px']
         self.projectile = pico2d.load_image(str(ROOT / SETTINGS['projectile_art']))
+        self.boss_rock = pico2d.load_image(str(ROOT / ROCKS['main']['art']))
         self.clips = {}
         for clip in ATLAS['clips']:
-            actor, action = clip['actor'], clip['action']
-            directory = ROOT / SETTINGS['asset_dir']
-            source = ATLAS_PATH.parent / clip['file']
-            flash_source = directory / f'{actor}-{action}-flash.png'
-            images = (pico2d.load_image(str(source)), pico2d.load_image(str(flash_source)))
-            if any((image.w, image.h) != (self.cell * clip['frames'], self.cell * 8)
-                   for image in images):
-                raise ValueError(f'스프라이트 시트 크기가 다릅니다: {actor}/{action}')
-            self.clips[actor, action] = clip, images
+            if clip['actor'] != 'boss':
+                self.load_clip(clip, False)
+                self.load_clip(clip, True)
+
+    def load_clip(self, clip, flash):
+        actor, action = clip['actor'], clip['action']
+        source = (ROOT / SETTINGS['asset_dir'] / f'{actor}-{action}-flash.png'
+                  if flash else ATLAS_PATH.parent / clip['file'])
+        image = pico2d.load_image(str(source))
+        if (image.w, image.h) != (self.cell * clip['frames'], self.cell * 8):
+            raise ValueError(f'스프라이트 시트 크기가 다릅니다: {actor}/{action}')
+        self.clips[actor, action, flash] = image
+        return image
 
     def draw(self, actor, action, owner, camera, angle, elapsed=0.0, frame=None, flash=False,
              reveal=1.0, clip_at_x=None, clip_above_y=None):
-        clip, images = self.clips[actor, action]
+        clip = CLIPS[actor, action]
         index = frame_index(clip, elapsed, frame)
         foot_y = owner.y - owner.height / 2
         x, y = camera.to_screen(owner.x, foot_y)
@@ -69,7 +75,9 @@ class SpriteLibrary:
         x += (half - self.anchor[0]) * scale
         y += (self.anchor[1] - half) * scale
         bottom = (7 - direction(angle)) * self.cell
-        image = images[bool(flash)]
+        image = self.clips.get((actor, action, bool(flash)))
+        if image is None:
+            image = self.load_clip(clip, bool(flash))
         if actor == 'hero' and flash:
             color = (250, 55, 52) if flash == 'red' else (255, 255, 255)
             pico2d.SDL_SetTextureColorMod(image.texture, *color)

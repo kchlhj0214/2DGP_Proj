@@ -721,7 +721,11 @@ def build(actors, directions, source=SOURCE, destination=ASSETS):
                 clip["shield_px"] = emitters
             atlas["clips"].append(clip)
             print(f"{name}: {len(motion)} frames x {len(directions)} directions", flush=True)
-    (destination / "atlas.json").write_text(json.dumps(atlas, indent=2) + "\n", encoding="utf-8")
+    atlas_file = destination / "atlas.json"
+    if atlas_file.is_file() and directions == DIRECTIONS:
+        previous = json.loads(atlas_file.read_text(encoding="utf-8"))
+        atlas["clips"].extend(clip for clip in previous["clips"] if clip["actor"] == "boss")
+    atlas_file.write_text(json.dumps(atlas, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

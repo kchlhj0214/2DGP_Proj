@@ -56,16 +56,53 @@ def generate():
     data = validate(json.loads((ROOT / 'data/scale.json').read_text(encoding='utf-8')))
     combat = validate_combat(json.loads((ROOT / 'data/combat.json').read_text(encoding='utf-8')), data)
     waves = validate_waves(json.loads((ROOT / 'data/waves.json').read_text(encoding='utf-8')), data, combat)
+    boss = validate_boss(json.loads((ROOT / 'data/boss.json').read_text(encoding='utf-8')), data, waves)
     presentation = validate_presentation(json.loads((ROOT / 'data/presentation.json').read_text(encoding='utf-8')))
     # 모든 시트 검증이 성공한 뒤에만 코드를 생성한다.
     for sheet, output, content in (('scale', 'game_data.py', data),
                                    ('combat', 'combat_data.py', combat),
                                    ('waves', 'wave_data.py', waves),
+                                   ('boss', 'boss_data.py', boss),
                                    ('presentation', 'presentation_data.py', presentation)):
         source = f'# 자동 생성 파일: data/{sheet}.json을 수정한 뒤 tools/generate_data.py 실행\n'
         for name, rows in content.items():
             source += f'{name.upper()} = {pformat({row["id"]: row for row in rows}, sort_dicts=False)}\n\n'
         (ROOT / output).write_text(source, encoding='utf-8')
+
+
+def validate_boss(data, scale, waves):
+    schemas = {
+        'bosses': {'character_id', 'wave_id', 'hp', 'scale', 'speed_kmph', 'arrival_s', 'between_attacks_s', 'push_s'},
+        'charges': {'damage', 'energy_ratio', 'guard_damage_ratio', 'guard_push_m', 'windup_s',
+                    'recovery_s', 'speed_mps', 'length_m', 'width_m'},
+        'slams': {'damage', 'energy_ratio', 'guard_damage_ratio', 'windup_s', 'recovery_s', 'radius_m'},
+        'rocks': {'damage', 'energy_ratio', 'radius_m', 'count', 'flight_s', 'interval_s', 'art'},
+        'swings': {'damage', 'energy_ratio', 'guard_push_diameter_ratio', 'windup_s', 'swing_s',
+                   'recovery_s', 'length_m', 'width_m', 'spread_deg'},
+    }
+    if set(data) != set(schemas):
+        raise ValueError('보스 시트가 누락되었거나 이름이 잘못되었습니다.')
+    for name, columns in schemas.items():
+        rows = data[name]
+        identifier = 'orc' if name == 'bosses' else 'main'
+        if len(rows) != 1 or set(rows[0]) != columns | {'id'} or rows[0]['id'] != identifier:
+            raise ValueError(f'{name}: 누락되거나 잘못된 보스 셀')
+        for key in columns - {'art', 'character_id', 'wave_id'}:
+            value = rows[0][key]
+            if type(value) not in (int, float) or not isfinite(value) or value <= 0:
+                raise ValueError(f'{name}.{key}: 양의 유한 수가 필요합니다.')
+            if key.endswith('_ratio') and value > 1:
+                raise ValueError(f'{name}.{key}: 1 이하의 비율이 필요합니다.')
+    if data['bosses'][0]['character_id'] not in {row['id'] for row in scale['characters']}:
+        raise ValueError('보스의 캐릭터 크기 참조가 잘못되었습니다.')
+    if data['bosses'][0]['wave_id'] not in {row['id'] for row in waves['waves']}:
+        raise ValueError('보스의 웨이브 참조가 잘못되었습니다.')
+    rock = data['rocks'][0]
+    if type(rock['count']) is not int or not isinstance(rock['art'], str) or not (ROOT / rock['art']).is_file():
+        raise ValueError('낙석 수 또는 이미지가 잘못되었습니다.')
+    if data['swings'][0]['spread_deg'] >= 180:
+        raise ValueError('보스 휘두르기의 각도는 180도보다 작아야 합니다.')
+    return data
 
 
 def validate_presentation(data):
@@ -109,7 +146,8 @@ def validate_presentation(data):
     atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))
     expected = {'hero': {'idle','guard_walk','guard_walk_front','guard','run','parry'},
                 'melee': {'idle','walk','chop','deflected','collapse'},
-                'ranged': {'idle','walk','cast','stagger','ash'}}
+                'ranged': {'idle','walk','cast','stagger','ash'},
+                'boss': {'idle','walk','charge','slam','swing','stagger','recover','collapse'}}
     if atlas['directions'] != ['S','SE','E','NE','N','NW','W','SW'] or atlas['fps'] <= 0:
         raise ValueError('스프라이트 방향 또는 속도 오류')
     for clip in atlas['clips']:

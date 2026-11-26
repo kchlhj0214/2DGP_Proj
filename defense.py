@@ -164,7 +164,8 @@ class PlayerCombat:
         self.feedback('parry')
         return True
 
-    def receive(self, attack_id, source, damage, energy_gain):
+    def receive(self, attack_id, source, damage, energy_gain, *, guard_damage_ratio=0, guard_push_m=0,
+                guard_push_s=0):
         if self.hp <= 0 or attack_id in self.resolved:
             return 'ignored'
         if self.try_parry(attack_id, source, energy_gain):
@@ -176,19 +177,28 @@ class PlayerCombat:
         if self.time < self.success_invuln_until - 1e-9:
             return 'invulnerable'
         if self.state == 'guard' and self.front(source):
+            if guard_push_m:
+                direction = getattr(source, 'incoming_angle',
+                                    atan2(source.y - self.owner.y, source.x - self.owner.x))
+                self.owner.start_knockback(direction + pi, guard_push_m, guard_push_s)
+            if guard_damage_ratio:
+                self.take_damage(damage * guard_damage_ratio)
             self.feedback('block')
             return 'block'
+        self.take_damage(damage)
+        self.feedback('hit')
+        return 'hit'
+
+    def take_damage(self, damage):
         previous = self.hp
         self.hp = max(0, self.hp - damage)
         if self.owner.effects:
             self.owner.effects.damage(self.owner, previous - self.hp, player_hit=True)
         self.hit_invuln_until = self.time + self.settings['hit_invuln_s']
-        self.feedback('hit')
         if self.hp == 0:
             self.state = 'dead'
             self.owner.pressed_keys.clear()
             self.beam = None
-        return 'hit'
 
     def draw(self):
         raising = self.position_lock_remaining() > 1e-9

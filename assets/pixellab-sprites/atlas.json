@@ -2348,6 +2348,62 @@
       "frames": 16,
       "loop": false,
       "file": "ranged-ash.png"
+    },
+    {
+      "actor": "boss",
+      "action": "idle",
+      "frames": 4,
+      "loop": true,
+      "file": "boss-idle.png"
+    },
+    {
+      "actor": "boss",
+      "action": "walk",
+      "frames": 8,
+      "loop": true,
+      "file": "boss-walk.png"
+    },
+    {
+      "actor": "boss",
+      "action": "charge",
+      "frames": 8,
+      "loop": false,
+      "file": "boss-charge.png"
+    },
+    {
+      "actor": "boss",
+      "action": "slam",
+      "frames": 8,
+      "loop": false,
+      "file": "boss-slam.png"
+    },
+    {
+      "actor": "boss",
+      "action": "swing",
+      "frames": 8,
+      "loop": false,
+      "file": "boss-swing.png"
+    },
+    {
+      "actor": "boss",
+      "action": "stagger",
+      "frames": 8,
+      "loop": false,
+      "file": "boss-stagger.png"
+    },
+    {
+      "actor": "boss",
+      "action": "recover",
+      "frames": 8,
+      "loop": false,
+      "file": "boss-recover.png"
+    },
+    {
+      "actor": "boss",
+      "action": "collapse",
+      "frames": 8,
+      "loop": false,
+      "file": "boss-collapse.png"
     }
   ]
 }

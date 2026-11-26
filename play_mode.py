@@ -75,7 +75,7 @@ def handle_events():
             break
         elif event.type == pico2d.SDL_KEYDOWN and focused and waves.handle_key(event.key):
             break
-        elif focused and not paused:
+        elif focused and not paused and not waves.won:
             player.handle_event(event)
 
 
@@ -85,6 +85,10 @@ def update():
         elapsed = game_framework.frame_time
         remaining = elapsed
         effects = player.effects
+
+        def battle_over():
+            return waves.won
+
         try:
             while remaining > 1e-10:
                 stop = effects.stopped_for
@@ -93,13 +97,17 @@ def update():
                     effects.update(frozen)
                     remaining -= frozen
                     continue
+                if waves.won:
+                    waves.boss.death_age += remaining
+                    effects.update(remaining)
+                    break
                 step = min(remaining, SYSTEMS['main']['step_s'])
                 deadline = waves.remaining_s
                 if deadline is not None and player.combat.hp > 0:
                     step = min(step, deadline)
                 game_framework.frame_time = step
                 effects.update(step)
-                game_world.update()
+                game_world.update(battle_over)
                 for projectile in projectiles[:]:
                     if not projectile.active:
                         projectiles.remove(projectile)
@@ -124,6 +132,8 @@ def render():
 
 
 def draw_ground_effects():
+    if waves.won:
+        return
     for enemy in enemies:
         enemy.draw_warning()
     beam = player.combat.beam

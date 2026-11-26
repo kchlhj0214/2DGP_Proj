@@ -15,9 +15,11 @@ def remove_object(obj):
     raise ValueError('월드에 없는 객체입니다.')
 
 
-def update():
+def update(stop=None):
     for layer in world:
         for obj in layer[:]:
+            if stop is not None and stop():
+                return
             obj.update()
 
 

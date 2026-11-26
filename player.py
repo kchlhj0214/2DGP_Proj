@@ -1,6 +1,6 @@
 """LEC11의 객체 구조와 LEC16의 시간 기반 이동을 적용한 플레이어."""
 
-from math import atan2, hypot, pi
+from math import atan2, cos, hypot, pi, sin
 
 import pico2d
 
@@ -21,6 +21,7 @@ class Player:
         self.projectiles = []
         self.sprites = self.effects = None
         self.moving = False
+        self.knockback = None
         self.visual_motion, self.visual_time = 'idle', 0.0
         self.visual_angle = -pi / 2
         self.combat = PlayerCombat(self)
@@ -67,14 +68,30 @@ class Player:
             x, y - offset_y, self.width, self.boundary_height)
         return ground_x, ground_y + offset_y
 
+    def start_knockback(self, angle, distance, duration):
+        target = self.constrain_position(self.x + cos(angle) * distance, self.y + sin(angle) * distance)
+        self.knockback = (self.x, self.y, *target, duration, 0.0)
+
+    def advance_knockback(self, dt):
+        if self.knockback is None or self.combat.hp <= 0:
+            return 0.0
+        x, y, end_x, end_y, duration, age = self.knockback
+        used = min(dt, duration - age)
+        age += used
+        progress = 1 - (1 - age / duration) ** 2
+        self.x, self.y = x + (end_x - x) * progress, y + (end_y - y) * progress
+        self.knockback = (x, y, end_x, end_y, duration, age) if age < duration else None
+        return used
+
     def update(self):
         dt = game_framework.frame_time
-        moving_dt = max(0.0, dt - self.combat.position_lock_remaining())
+        before = (self.x, self.y)
+        sliding = self.advance_knockback(dt)
+        moving_dt = max(0.0, dt - max(sliding, self.combat.position_lock_remaining()))
         self.combat.advance(dt)
         dx = int(pico2d.SDLK_d in self.pressed_keys) - int(pico2d.SDLK_a in self.pressed_keys)
         dy = int(pico2d.SDLK_w in self.pressed_keys) - int(pico2d.SDLK_s in self.pressed_keys)
         length = hypot(dx, dy)
-        before = (self.x, self.y)
         if length and moving_dt > 1e-9 and self.combat.state != 'dead':
             speed = (self.combat.settings['guard_kmph'] / 3.6
                      if self.combat.state == 'guard' else self.speed_mps)
@@ -82,7 +99,7 @@ class Player:
             self.x, self.y = self.constrain_position(
                 self.x + dx / length * distance,
                 self.y + dy / length * distance)
-        self.moving = hypot(self.x - before[0], self.y - before[1]) > 1e-9
+        self.moving = sliding == 0 and hypot(self.x - before[0], self.y - before[1]) > 1e-9
         state = self.combat.state
         if state == 'guard' or self.combat.position_lock_remaining() > 1e-9:
             self.visual_angle = self.combat.aim

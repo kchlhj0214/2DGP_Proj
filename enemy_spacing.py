@@ -42,7 +42,7 @@ def sweep_fraction(enemy, dx, dy):
 
 
 def safe_step(enemy, dx, dy):
-    x, y = enemy.player.constrain_position(enemy.x + dx, enemy.y + dy)
+    x, y = enemy.constrain_position(enemy.x + dx, enemy.y + dy)
     dx, dy = x - enemy.x, y - enemy.y
     fraction = sweep_fraction(enemy, dx, dy)
     x, y = enemy.x + dx * fraction, enemy.y + dy * fraction

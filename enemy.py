@@ -41,6 +41,9 @@ class MeleeEnemy:
         return (self.x - self.width / 2, self.y - self.height / 2,
                 self.x + self.width / 2, self.y + self.height / 2)
 
+    def constrain_position(self, x, y):
+        return self.player.constrain_position(x, y)
+
     def stun(self, duration):
         if self.hp > 0:
             self.state, self.age = 'stunned', 0.0

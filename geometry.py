@@ -69,6 +69,32 @@ def draw_sector(x, y, angle, radius, spread, camera, color):
     draw_polygon(sector_points(x, y, angle, radius, spread), camera, color)
 
 
+def circle_points(x, y, radius):
+    return [(x + cos(i * pi / 24) * radius, y + sin(i * pi / 24) * radius) for i in range(48)]
+
+
+def draw_boss_warning(points, camera, opacity):
+    if not points:
+        return
+    vertices = []
+    for x, y in points:
+        sx, sy = camera.to_screen(x, y)
+        vertices.append(pico2d.SDL_Vertex(pico2d.SDL_FPoint(sx, camera.height_px - 1 - sy),
+                                           pico2d.SDL_Color(203, 32, 40, round(95 * opacity)),
+                                           pico2d.SDL_FPoint(0, 0)))
+    indices = [index for i in range(1, len(vertices) - 1) for index in (0, i, i + 1)]
+    renderer = canvas.renderer
+    blend = c_int()
+    pico2d.SDL_GetRenderDrawBlendMode(renderer, byref(blend))
+    pico2d.SDL_SetRenderDrawBlendMode(renderer, pico2d.SDL_BLENDMODE_BLEND)
+    try:
+        pico2d.SDL_RenderGeometry(renderer, None, (pico2d.SDL_Vertex * len(vertices))(*vertices),
+                                  len(vertices), (c_int * len(indices))(*indices), len(indices))
+    finally:
+        pico2d.SDL_SetRenderDrawBlendMode(renderer, blend.value)
+    draw_polygon(points, camera, (239, 66, 67))
+
+
 def warning_strength(age, windup):
     if not 0 <= age < windup:
         return 0

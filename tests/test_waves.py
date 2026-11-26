@@ -82,7 +82,7 @@ class WaveTests(unittest.TestCase):
             self.assertAlmostEqual(second_arrival[0] - first_arrival[0], gap)
 
     def test_count_and_kinds_for_every_wave_and_mode(self):
-        for number, count in ((1, 8), (2, 12), (3, 16), (4, 0)):
+        for number, count in ((1, 8), (2, 12), (3, 16)):
             for selection in ('all', 'melee', 'ranged'):
                 player, waves = controller()
                 waves.load(number, selection)
@@ -182,7 +182,7 @@ class WaveTests(unittest.TestCase):
             waves.handle_key(code)
             self.assertIsNone(waves.single_mode)
             elapse(waves, 8)
-            expected = {1: 8, 2: 12, 3: 16, 4: 0}[waves.number]
+            expected = {1: 8, 2: 12, 3: 16, 4: 1}[waves.number]
             self.assertEqual(len(waves.enemies), expected)
 
     def test_jump_and_filter_remove_old_objects_and_queue_keep_player(self):
@@ -213,7 +213,7 @@ class WaveTests(unittest.TestCase):
         self.assertEqual(sum(isinstance(e, RangedEnemy) for e in waves.enemies), 4)
         waves.handle_key(pico2d.SDLK_4)
         elapse(waves, 100)
-        self.assertEqual((waves.number, len(waves.enemies), waves.pending), (4, 0, 0))
+        self.assertEqual((waves.number, waves.enemies, waves.pending), (4, [waves.boss], 0))
         self.assertFalse(waves.handle_key(pico2d.SDLK_7))
 
     def test_frame_rate_does_not_change_spawn_timeline(self):
@@ -535,7 +535,6 @@ class DebugInputRenderTests(unittest.TestCase):
             self.assertFalse(play_mode.projectiles)
             self.assertEqual(play_mode.waves.pending, 0)
             play_mode.render()
-            capture_png(ROOT / 'shots/wave-four-wait.png', 1280, 720)
             press(pico2d.SDLK_r)
             self.assertEqual((play_mode.waves.number, play_mode.waves.selection), (1, 'all'))
             press(pico2d.SDLK_ESCAPE)
