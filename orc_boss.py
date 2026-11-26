@@ -9,6 +9,7 @@ from boss_data import BOSSES, CHARGES, ROCKS, SLAMS, SWINGS
 from enemy import MeleeEnemy
 from geometry import (box_points, circle_intersects_polygon, circle_points, draw_boss_warning,
                       draw_sweep_warning, intersects, oriented_box)
+from stone_eruption import StoneEruption
 
 
 BOSS = BOSSES['orc']
@@ -24,7 +25,6 @@ class FallingRock:
     impact_at: float
     spent: bool = False
     can_be_stunned = False
-    incoming_angle: float = 0.0
 
 
 class OrcBoss(MeleeEnemy):
@@ -42,6 +42,7 @@ class OrcBoss(MeleeEnemy):
         self.charge_remaining = 0.0
         self.staggered = False
         self.rocks = []
+        self.eruption = None
 
     def constrain_position(self, x, y):
         offset = self.height / 4
@@ -56,6 +57,7 @@ class OrcBoss(MeleeEnemy):
         super().take_damage(amount)
         if self.hp == 0:
             self.rocks.clear()
+            self.eruption = None
 
     def begin(self, pattern):
         self.pattern, self.state, self.age = pattern, 'windup', 0.0
@@ -79,18 +81,16 @@ class OrcBoss(MeleeEnemy):
                 high = step
         return low
 
-    def hit_shape(self, shape, spec, source=None, attack_id=None, push=0.0):
-        source = self if source is None else source
-        attack_id = self.attack_id if attack_id is None else attack_id
+    def hit_weapon(self, shape, spec, push, facing):
         player = self.player
         combat = player.combat
         energy = combat.settings['energy_max'] * spec['energy_ratio']
         if shape(box_points(player.get_bb())):
-            return combat.receive(attack_id, source, spec['damage'], energy,
+            return combat.receive(self.attack_id, self, spec['damage'], energy,
                                   guard_damage_ratio=spec.get('guard_damage_ratio', 0),
-                                  guard_push_m=push, guard_push_s=BOSS['push_s'])
-        area = combat.parry_area(source)
-        if area and shape(area) and combat.try_parry(attack_id, source, energy):
+                                  guard_push_m=push, guard_push_s=BOSS['push_s'], facing=facing)
+        area = combat.parry_area(self, facing=facing)
+        if area and shape(area) and combat.try_parry(self.attack_id, self, energy, facing=facing):
             return 'parry'
         return None
 
@@ -102,7 +102,11 @@ class OrcBoss(MeleeEnemy):
         distance = min(self.charge_remaining, CHARGE['speed_mps'] * dt)
         if not self.hit:
             path = self.charge_shape(distance)
-            result = self.hit_shape(lambda points: intersects(path, points), CHARGE, push=CHARGE['guard_push_m'])
+            dx, dy = self.x - self.player.x, self.y - self.player.y
+            incoming = atan2(dy, dx) if dx or dy else self.angle + pi
+            facing = self.player.combat.faces(incoming)
+            result = self.hit_weapon(lambda points: intersects(path, points), CHARGE,
+                                     CHARGE['guard_push_m'], facing)
             self.hit = result is not None
             if result == 'parry':
                 self.staggered = True
@@ -116,12 +120,12 @@ class OrcBoss(MeleeEnemy):
             self.recover()
 
     def slam(self):
-        result = self.hit_shape(lambda points: circle_intersects_polygon(self.x, self.y, SLAM['radius_m'], points), SLAM)
-        if result == 'parry':
-            self.recover()
-            return
-        rng = Random(self.attack_count)
         player = self.player
+        self.eruption = StoneEruption(self.x, self.y, SLAM['radius_m'], SLAM['spikes'],
+                                     SLAM['eruption_s'], self.attack_count)
+        if circle_intersects_polygon(self.x, self.y, SLAM['radius_m'], box_points(player.get_bb())):
+            player.combat.receive(self.attack_id, self, SLAM['damage'], 0, facing=False)
+        rng = Random(self.attack_count)
         edge = player.arena.radius - ROCK['radius_m']
         # At least one drop threatens the player's current area; other drops cover the arena.
         radius = hypot(player.x, player.y)
@@ -138,13 +142,15 @@ class OrcBoss(MeleeEnemy):
         self.state, self.age = 'rocks', 0.0
 
     def drop_rocks(self):
+        player = self.player
+        combat = player.combat
+        body = box_points(player.get_bb())
         for index, rock in enumerate(self.rocks):
             if not rock.spent and self.age >= rock.impact_at:
                 rock.spent = True
-                dx, dy = rock.x - self.player.x, rock.y - self.player.y
-                rock.incoming_angle = atan2(dy, dx) if dx or dy else self.player.combat.aim
-                self.hit_shape(lambda points: circle_intersects_polygon(rock.x, rock.y, ROCK['radius_m'], points),
-                               ROCK, source=rock, attack_id=(*self.attack_id, index))
+                if circle_intersects_polygon(rock.x, rock.y, ROCK['radius_m'], body):
+                    energy = combat.settings['energy_max'] * ROCK['energy_ratio']
+                    combat.receive((*self.attack_id, index), rock, ROCK['damage'], energy, facing=True)
         if all(rock.spent for rock in self.rocks):
             self.rocks.clear()
             self.recover()
@@ -155,7 +161,10 @@ class OrcBoss(MeleeEnemy):
             angle = self.angle + radians(SWING['spread_deg']) * (0.5 - progress)
             club = oriented_box(self.x, self.y, angle, SWING['length_m'], SWING['width_m'])
             push = 2 * self.player.arena.radius * SWING['guard_push_diameter_ratio']
-            self.hit = self.hit_shape(lambda points: intersects(club, points), SWING, push=push) is not None
+            combat = self.player.combat
+            # The club rotates clockwise. Its incoming side is opposite the tip's velocity.
+            facing = combat.front(self) or combat.faces(angle + pi / 2)
+            self.hit = self.hit_weapon(lambda points: intersects(club, points), SWING, push, facing) is not None
         if self.age >= SWING['swing_s']:
             self.recover()
 
@@ -220,6 +229,8 @@ class OrcBoss(MeleeEnemy):
 
     def draw_warning(self):
         camera = self.player.camera
+        if self.eruption is not None and self.state == 'rocks':
+            self.eruption.draw(camera, self.age)
         if self.state == 'windup':
             strength = 0.48 + 0.48 * min(1, self.age / ATTACKS[self.pattern]['windup_s'])
             if self.pattern == 'charge':

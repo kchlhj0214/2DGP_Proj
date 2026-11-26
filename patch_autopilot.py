@@ -5,7 +5,7 @@ from math import pi
 import pico2d
 
 from enemy_spacing import is_free
-from orc_boss import CHARGE, ROCK
+from orc_boss import CHARGE, ROCK, SLAM
 from projectile import Projectile
 from wave_data import GATES, RANGED, SETTINGS
 
@@ -200,8 +200,14 @@ class PatchRound:
                 self.boss_hp_before_attack = combat.hp
                 boss.begin('slam')
             if boss.state == 'rocks':
-                self.boss_hit_seen |= len(boss.rocks) == ROCK['count'] and combat.hp < self.boss_hp_before_attack
-            if boss.pattern == 'slam' and boss.state == 'recovery' and self.boss_hit_seen:
+                self.boss_hit_seen |= (len(boss.rocks) == ROCK['count'] and boss.eruption is not None
+                                      and combat.hp == self.boss_hp_before_attack - SLAM['damage'])
+                if boss.age < ROCK['flight_s']:
+                    # Keep the first impact inside the player's box and behind the shield.
+                    player.x = boss.rocks[0].x + 1
+                    combat.aim = 0
+            if (boss.pattern == 'slam' and boss.state == 'recovery' and self.boss_hit_seen
+                    and combat.hp == self.boss_hp_before_attack - SLAM['damage']):
                 self.boss_attack_started = False
                 self.write('pass')
         elif self.index == 13:
@@ -210,6 +216,7 @@ class PatchRound:
                 player.x, player.y = boss.x + 6, boss.y
                 self.target_x = player.x
                 self.boss_hp_before_attack = combat.hp
+                combat.aim = pi / 2
                 boss.begin('swing')
             if self.boss_attack_started and player.x - self.target_x >= self.mode.arena.radius / 2 - .01:
                 if combat.hp == self.boss_hp_before_attack:

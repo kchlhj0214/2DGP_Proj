@@ -6,7 +6,7 @@
     {"id": "main", "damage": 28, "energy_ratio": 0.5, "guard_damage_ratio": 0.25, "guard_push_m": 6.0, "windup_s": 1.05, "recovery_s": 3.0, "speed_mps": 18.0, "length_m": 19.0, "width_m": 5.2}
   ],
   "slams": [
-    {"id": "main", "damage": 32, "energy_ratio": 0.5, "guard_damage_ratio": 0.25, "windup_s": 1.15, "recovery_s": 1.25, "radius_m": 11.5}
+    {"id": "main", "damage": 32, "windup_s": 1.15, "recovery_s": 1.25, "radius_m": 11.5, "eruption_s": 0.48, "spikes": 56}
   ],
   "rocks": [
     {"id": "main", "damage": 12, "energy_ratio": 0.25, "radius_m": 2.25, "count": 9, "flight_s": 1.2, "interval_s": 0.08, "art": "assets/sprites/boss-rock.png"}

@@ -121,17 +121,22 @@ class PlayerCombat:
         return radians(self.settings[setting])
 
     def front(self, source):
-        direction = getattr(source, 'incoming_angle',
-                            atan2(source.y - self.owner.y, source.x - self.owner.x))
+        return self.faces(self.incoming_direction(source))
+
+    def incoming_direction(self, source):
+        return getattr(source, 'incoming_angle',
+                       atan2(source.y - self.owner.y, source.x - self.owner.x))
+
+    def faces(self, direction):
         delta = direction - self.aim
         return cos(delta) >= cos(self.guard_arc() / 2) - 1e-9
 
-    def can_parry(self, source):
+    def can_parry(self, source, facing=None):
         return (self.hp > 0 and self.time >= self.hit_invuln_until - 1e-9
-                and self.parry_active() and self.front(source))
+                and self.parry_active() and (self.front(source) if facing is None else facing))
 
-    def parry_area(self, source):
-        if not self.can_parry(source):
+    def parry_area(self, source, *, facing=None):
+        if not self.can_parry(source, facing):
             return ()
         return sector_points(self.owner.x, self.owner.y, self.aim,
                              self.settings['parry_radius_m'], self.guard_arc())
@@ -148,8 +153,8 @@ class PlayerCombat:
             if hypot(dx, dy) <= reach + 1e-9:
                 enemy.start_parry_recoil()
 
-    def try_parry(self, attack_id, source, energy_gain):
-        if attack_id in self.resolved or not self.can_parry(source):
+    def try_parry(self, attack_id, source, energy_gain, *, facing=None):
+        if attack_id in self.resolved or not self.can_parry(source, facing):
             return False
         self.resolved.add(attack_id)
         self.energy = min(self.settings['energy_max'], self.energy + energy_gain)
@@ -165,10 +170,11 @@ class PlayerCombat:
         return True
 
     def receive(self, attack_id, source, damage, energy_gain, *, guard_damage_ratio=0, guard_push_m=0,
-                guard_push_s=0):
+                guard_push_s=0, facing=None):
         if self.hp <= 0 or attack_id in self.resolved:
             return 'ignored'
-        if self.try_parry(attack_id, source, energy_gain):
+        facing = self.front(source) if facing is None else facing
+        if self.try_parry(attack_id, source, energy_gain, facing=facing):
             return 'parry'
         self.resolved.add(attack_id)
         # 일반 피격 보호 중에는 새 패링으로 축적하지 않는다.
@@ -176,10 +182,9 @@ class PlayerCombat:
             return 'invulnerable'
         if self.time < self.success_invuln_until - 1e-9:
             return 'invulnerable'
-        if self.state == 'guard' and self.front(source):
+        if self.state == 'guard' and facing:
             if guard_push_m:
-                direction = getattr(source, 'incoming_angle',
-                                    atan2(source.y - self.owner.y, source.x - self.owner.x))
+                direction = self.incoming_direction(source)
                 self.owner.start_knockback(direction + pi, guard_push_m, guard_push_s)
             if guard_damage_ratio:
                 self.take_damage(damage * guard_damage_ratio)

@@ -22,11 +22,11 @@ CHARGES = {'main': {'id': 'main',
 
 SLAMS = {'main': {'id': 'main',
           'damage': 32,
-          'energy_ratio': 0.5,
-          'guard_damage_ratio': 0.25,
           'windup_s': 1.15,
           'recovery_s': 1.25,
-          'radius_m': 11.5}}
+          'radius_m': 11.5,
+          'eruption_s': 0.48,
+          'spikes': 56}}
 
 ROCKS = {'main': {'id': 'main',
           'damage': 12,

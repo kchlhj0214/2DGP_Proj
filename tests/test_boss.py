@@ -34,19 +34,22 @@ class BossTests(TestCase):
         game_world.clear()
 
     def test_charge_can_miss_get_parried_or_chip_a_guard(self):
-        for method in ('dodge', 'hit', 'parry', 'guard'):
+        for method in ('dodge', 'hit', 'parry', 'guard', 'rear-parry', 'rear-guard'):
             with self.subTest(method=method):
                 player, boss = encounter()
                 boss.begin('charge')
                 advance(player, [boss], CHARGE['windup_s'] - .035)
                 if method == 'dodge':
                     player.y = CHARGE['width_m']
-                defend(player, method)
+                if method.startswith('rear-'):
+                    player.combat.aim = 0
+                defend(player, method.removeprefix('rear-'))
                 advance(player, [boss], 1.2)
                 self.assertEqual(boss.state, 'recovery')
                 self.assertEqual(boss.angle, 0)
                 self.assertEqual(boss.staggered, method == 'parry')
-                damage = {'hit': CHARGE['damage'], 'guard': CHARGE['damage'] / 4}.get(method, 0)
+                damage = (CHARGE['damage'] if method in ('hit', 'rear-parry', 'rear-guard') else
+                          CHARGE['damage'] / 4 if method == 'guard' else 0)
                 self.assertEqual(player.combat.hp, 100 - damage)
                 self.assertEqual(player.combat.energy, 20 if method == 'parry' else 0)
                 if method == 'guard':
@@ -62,24 +65,25 @@ class BossTests(TestCase):
                 advance(player, [boss], .04)
                 self.assertEqual(boss.state, 'idle')
 
-    def test_slam_guard_takes_chip_parry_cancels_all_falling_rocks(self):
-        for method in ('guard', 'parry'):
+    def test_slam_ignores_guard_and_parry_but_leaves_room_to_dodge(self):
+        for method in ('guard', 'parry', 'dodge'):
             with self.subTest(method=method):
                 player, boss = encounter()
                 boss.begin('slam')
                 advance(player, [boss], SLAM['windup_s'] - .04)
+                if method == 'dodge':
+                    player.x = SLAM['radius_m'] + player.width
+                self.assertIsNone(boss.eruption)
                 defend(player, method)
                 advance(player, [boss], .07)
-                if method == 'parry':
-                    self.assertEqual((boss.state, boss.rocks), ('recovery', []))
-                    self.assertEqual((player.combat.hp, player.combat.energy), (100, 20))
-                else:
-                    self.assertEqual(boss.state, 'rocks')
-                    self.assertEqual(len(boss.rocks), ROCK['count'])
-                    self.assertEqual(player.combat.hp, 100 - SLAM['damage'] / 4)
+                self.assertEqual(boss.state, 'rocks')
+                self.assertEqual(len(boss.rocks), ROCK['count'])
+                self.assertEqual(len(boss.eruption.spikes), SLAM['spikes'])
+                self.assertEqual(player.combat.hp, 100 if method == 'dodge' else 100 - SLAM['damage'])
+                self.assertEqual(player.combat.energy, 0)
 
     def test_each_falling_rock_has_its_own_guard_or_parry(self):
-        for method in ('hit', 'guard', 'parry'):
+        for method in ('hit', 'guard', 'parry', 'outside'):
             with self.subTest(method=method):
                 player, boss = encounter(player_x=15)
                 if method == 'guard':
@@ -87,8 +91,10 @@ class BossTests(TestCase):
                 boss.begin('slam')
                 advance(player, [boss], SLAM['windup_s'] + ROCK['flight_s'] - .05)
                 first = boss.rocks[0]
-                if method == 'parry':
-                    defend(player, method)
+                player.x += ROCK['radius_m'] + (player.width if method == 'outside' else .25)
+                player.combat.aim = pi if method == 'outside' else 0
+                if method in ('parry', 'outside'):
+                    defend(player, 'parry')
                 advance(player, [boss], .12)
                 self.assertTrue(first.spent)
                 damage = ROCK['damage'] if method == 'hit' else 0
@@ -96,20 +102,22 @@ class BossTests(TestCase):
                 self.assertEqual(player.combat.energy, 10 if method == 'parry' else 0)
 
     def test_sweep_parry_charges_and_guard_pushes_without_damage(self):
-        for method in ('guard', 'parry', 'hit'):
-            with self.subTest(method=method):
-                player, boss = encounter()
-                if method == 'guard':
-                    defend(player, method)
-                boss.begin('swing')
-                advance(player, [boss], SWING['windup_s'] + .02)
-                if method == 'parry':
-                    defend(player, method)
-                advance(player, [boss], SWING['swing_s'] + BOSS['push_s'])
-                self.assertEqual(player.combat.hp, 100 - (SWING['damage'] if method == 'hit' else 0))
-                self.assertEqual(player.combat.energy, 10 if method == 'parry' else 0)
-                if method == 'guard':
-                    self.assertAlmostEqual(player.x, 6 + player.arena.radius / 2)
+        for aim, protected in ((pi, True), (pi / 2, True), (-pi / 2, False), (0, False)):
+            for method in ('guard', 'parry'):
+                with self.subTest(method=method, aim=aim):
+                    player, boss = encounter()
+                    player.combat.aim = aim
+                    if method == 'guard':
+                        defend(player, method)
+                    boss.begin('swing')
+                    advance(player, [boss], SWING['windup_s'] - .035)
+                    if method == 'parry':
+                        defend(player, method)
+                    advance(player, [boss], SWING['swing_s'] + BOSS['push_s'] + .04)
+                    self.assertEqual(player.combat.hp, 100 if protected else 100 - SWING['damage'])
+                    self.assertEqual(player.combat.energy, 10 if protected and method == 'parry' else 0)
+                    expected_x = 6 + player.arena.radius / 2 if protected and method == 'guard' else 6
+                    self.assertAlmostEqual(player.x, expected_x)
 
     def test_boss_enters_wave_four_with_survivors_and_victory_stops_attacks(self):
         player, waves = controller()

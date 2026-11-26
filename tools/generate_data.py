@@ -75,7 +75,7 @@ def validate_boss(data, scale, waves):
         'bosses': {'character_id', 'wave_id', 'hp', 'scale', 'speed_kmph', 'arrival_s', 'between_attacks_s', 'push_s'},
         'charges': {'damage', 'energy_ratio', 'guard_damage_ratio', 'guard_push_m', 'windup_s',
                     'recovery_s', 'speed_mps', 'length_m', 'width_m'},
-        'slams': {'damage', 'energy_ratio', 'guard_damage_ratio', 'windup_s', 'recovery_s', 'radius_m'},
+        'slams': {'damage', 'windup_s', 'recovery_s', 'radius_m', 'eruption_s', 'spikes'},
         'rocks': {'damage', 'energy_ratio', 'radius_m', 'count', 'flight_s', 'interval_s', 'art'},
         'swings': {'damage', 'energy_ratio', 'guard_push_diameter_ratio', 'windup_s', 'swing_s',
                    'recovery_s', 'length_m', 'width_m', 'spread_deg'},
@@ -98,8 +98,11 @@ def validate_boss(data, scale, waves):
     if data['bosses'][0]['wave_id'] not in {row['id'] for row in waves['waves']}:
         raise ValueError('보스의 웨이브 참조가 잘못되었습니다.')
     rock = data['rocks'][0]
+    slam = data['slams'][0]
     if type(rock['count']) is not int or not isinstance(rock['art'], str) or not (ROOT / rock['art']).is_file():
         raise ValueError('낙석 수 또는 이미지가 잘못되었습니다.')
+    if type(slam['spikes']) is not int or slam['eruption_s'] >= rock['flight_s']:
+        raise ValueError('지면 강타의 돌기둥 수 또는 연출 시간이 잘못되었습니다.')
     if data['swings'][0]['spread_deg'] >= 180:
         raise ValueError('보스 휘두르기의 각도는 180도보다 작아야 합니다.')
     return data
@@ -241,7 +244,7 @@ def validate_waves(data, scale, combat):
             if type(row[field]) is not int or row[field] < 0:
                 raise ValueError('웨이브 번호와 마릿수는 음수가 아닌 정수여야 합니다.')
         if row['number'] == 4 and row['melee_per_gate'] + row['ranged_per_gate'] != 0:
-            raise ValueError('보스 미구현 4웨이브는 비어 있어야 합니다.')
+            raise ValueError('보스 웨이브에는 일반 적의 새 입장이 없어야 합니다.')
     characters = {row['id']: row for row in scale['characters']}
     heights = {row['id']: row['height_m'] for row in scale['viewports']}
     tallest = max(heights[row['viewport_id']] * row['height_ratio'] for row in characters.values())
