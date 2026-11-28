@@ -16,6 +16,8 @@ class MeleeEnemy:
     sprite_actor = 'melee'
     death_action = 'collapse'
     recoil_action = 'deflected'
+    takes_space_priority = True
+    yields_space = False
 
     def __init__(self, identifier, data, x, y, player):
         self.identifier, self.data, self.player = identifier, data, player
@@ -85,7 +87,7 @@ class MeleeEnemy:
 
     def walk_toward(self, dx, dy, dt):
         pos = (self.x, self.y)
-        move_enemy(self, dx, dy)
+        move_enemy(self, dx, dy, priority=self.takes_space_priority)
         self.moving = hypot(self.x - pos[0], self.y - pos[1]) > 1e-9
         self.visual_time = self.visual_time + dt if self.moving else 0.0
 

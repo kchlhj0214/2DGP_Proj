@@ -9,6 +9,8 @@ from projectile import Projectile
 
 class RangedEnemy(MeleeEnemy):
     can_be_stunned = False
+    takes_space_priority = False
+    yields_space = True
     sprite_actor = 'ranged'
     death_action = 'ash'
     recoil_action = 'stagger'

@@ -31,6 +31,7 @@ class OrcBoss(MeleeEnemy):
     sprite_actor = 'boss'
     death_action = 'collapse'
     can_be_stunned = False
+    takes_space_priority = False
 
     def __init__(self, identifier, player):
         super().__init__(identifier, BOSS, 0.0, 0.0, player)

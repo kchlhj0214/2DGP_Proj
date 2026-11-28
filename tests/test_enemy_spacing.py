@@ -58,6 +58,26 @@ class SpacingTests(unittest.TestCase):
         self.assertAlmostEqual(second.get_bb()[0] - first.get_bb()[2], .7, places=6)
         self.assert_separate([first, second])
 
+    def test_two_ranged_enemies_yield_to_approaching_melee(self):
+        for reverse in (False, True):
+            with self.subTest(reverse=reverse):
+                player, melee, ranged = self.actors()
+                player.x, player.y = 10, 0
+                ranged.x, ranged.y = 4, -2.75
+                other = RangedEnemy('other', RANGED['ranged'], 4, 2.75, player, lambda p: None)
+                player.targets = [ranged, other, melee] if reverse else [melee, other, ranged]
+                player_position = player.x, player.y
+                for _ in range(120 * 6):
+                    game_framework.frame_time = 1 / 120
+                    for enemy in player.targets:
+                        enemy.update()
+                    self.assert_separate(player.targets)
+                    if melee.state == 'windup':
+                        break
+                self.assertEqual(melee.state, 'windup')
+                self.assertTrue(ranged.y < -2.75 or other.y > 2.75)
+                self.assertEqual((player.x, player.y), player_position)
+
     def test_stunned_enemy_stays_put_and_dead_enemy_does_not_block(self):
         player, first, second = self.actors()
         first.stun(1.5)
