@@ -46,9 +46,14 @@ def run(start_mode):
             now = perf_counter()
             frame_time = now - previous
             previous = now
-            stack[-1].handle_events()
+            mode = stack[-1]
+            mode.handle_events()
             if not running:
                 break
+            if stack[-1] is not mode:
+                # Asset loading during a screen switch is outside the new mode's clock.
+                previous = perf_counter()
+                frame_time = 0.0
             stack[-1].update()
             stack[-1].render()
             # CPU 사용을 줄일 뿐, 이동량은 이 값이 아닌 실제 frame_time으로 계산.
