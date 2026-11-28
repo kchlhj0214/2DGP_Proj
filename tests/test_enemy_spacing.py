@@ -11,7 +11,7 @@ from combat_data import ENEMIES
 from enemy import MeleeEnemy
 from enemy_spacing import move_enemy, overlaps, spawn_position
 from ranged_enemy import RangedEnemy
-from wave_data import RANGED
+from wave_data import GATES, RANGED, SETTINGS
 from wave_manager import WaveManager
 
 
@@ -22,7 +22,7 @@ class SpacingTests(unittest.TestCase):
     def actors(self):
         arena, player, camera = scene()
         first = MeleeEnemy('first', ENEMIES['melee'], 0, 0, player)
-        second = RangedEnemy('second', RANGED['ranged'], 2, 0, player, lambda p: None)
+        second = RangedEnemy('second', RANGED['ranged'], first.width + .8, 0, player, lambda p: None)
         player.targets = [first, second]
         return player, first, second
 
@@ -32,7 +32,10 @@ class SpacingTests(unittest.TestCase):
             for other in live[index + 1:]:
                 self.assertFalse(overlaps(enemy, enemy.x, enemy.y, other),
                                  f'{enemy.identifier} / {other.identifier}')
-            self.assertTrue(enemy.player.arena.contains_box(enemy.x, enemy.y - .45, .9, .9))
+            foot_height = enemy.player.boundary_height
+            foot_offset = (enemy.height - foot_height) / 2
+            self.assertTrue(enemy.player.arena.contains_box(enemy.x, enemy.y - foot_offset,
+                                                            enemy.width, foot_height))
 
     def test_second_damage_at_half_second_without_extending_immunity(self):
         player, first, second = self.actors()
@@ -52,8 +55,28 @@ class SpacingTests(unittest.TestCase):
     def test_large_move_cannot_tunnel_through_enemy(self):
         player, first, second = self.actors()
         move_enemy(first, 5, 0)
-        self.assertLessEqual(first.x, second.x - .9 + 1e-6)
+        self.assertAlmostEqual(second.get_bb()[0] - first.get_bb()[2], .7, places=6)
         self.assert_separate([first, second])
+
+    def test_two_ranged_enemies_yield_to_approaching_melee(self):
+        for reverse in (False, True):
+            with self.subTest(reverse=reverse):
+                player, melee, ranged = self.actors()
+                player.x, player.y = 10, 0
+                ranged.x, ranged.y = 4, -2.75
+                other = RangedEnemy('other', RANGED['ranged'], 4, 2.75, player, lambda p: None)
+                player.targets = [ranged, other, melee] if reverse else [melee, other, ranged]
+                player_position = player.x, player.y
+                for _ in range(120 * 6):
+                    game_framework.frame_time = 1 / 120
+                    for enemy in player.targets:
+                        enemy.update()
+                    self.assert_separate(player.targets)
+                    if melee.state == 'windup':
+                        break
+                self.assertEqual(melee.state, 'windup')
+                self.assertTrue(ranged.y < -2.75 or other.y > 2.75)
+                self.assertEqual((player.x, player.y), player_position)
 
     def test_stunned_enemy_stays_put_and_dead_enemy_does_not_block(self):
         player, first, second = self.actors()
@@ -70,13 +93,14 @@ class SpacingTests(unittest.TestCase):
         arena, player, camera = scene()
         waves = WaveManager(player, player.targets, player.projectiles)
         waves.load(3, 'all')
-        game_framework.frame_time = .9
+        game_framework.frame_time = 8
         waves.update()  # 기존 적이 전혀 움직이지 않아도 다음 적은 겹치지 않는다.
         self.assertEqual((len(player.targets), waves.pending), (16, 0))
         self.assert_separate(player.targets)
-        for gate in ('north', 'south', 'west', 'east'):
-            times = [round(t, 6) for t, g, _ in waves.spawn_log if g == gate]
-            self.assertEqual(times, [0, .3, .6, .9])
+        self.assertEqual([gate for _, gate, _ in waves.spawn_log], list(GATES) * 4)
+        gap = SETTINGS['main']['arrival_interval_s']
+        for index, (time, _, _) in enumerate(waves.spawn_log):
+            self.assertAlmostEqual(time, waves.spawn_log[0][0] + gap * index)
 
     def test_mixed_crowd_near_each_circular_boundary(self):
         arena, player, camera = scene()
@@ -120,10 +144,11 @@ class SpacingRenderTests(unittest.TestCase):
             play_mode.waves.load(3, 'all')
             play_mode.player.x, play_mode.player.y = 0, 25
             play_mode.camera.follow(play_mode.player)
-            game_framework.frame_time = 1
+            game_framework.frame_time = 7.4
             play_mode.update()
             play_mode.render()
             capture_png(ROOT / 'shots/enemy-spacing.png', 1280, 720)
+            self.assertEqual(len(play_mode.enemies), 16)
             for index, enemy in enumerate(play_mode.enemies):
                 for other in play_mode.enemies[index + 1:]:
                     self.assertFalse(overlaps(enemy, enemy.x, enemy.y, other))

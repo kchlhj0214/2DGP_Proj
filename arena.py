@@ -1,15 +1,34 @@
 """원형 경기장. 전달받은 경계 판정용 직사각형을 원 내부로 제한한다."""
 
-from math import ceil, floor, hypot, sqrt
+from math import ceil, hypot, sqrt
+from pathlib import Path
 
 import pico2d
+from presentation_data import VISUALS
+from wave_data import GATES
+
+
+ART = VISUALS['arena']
 
 
 class Arena:
     def __init__(self, data, viewport, camera):
         self.radius = viewport['height_m'] * data['diameter_height_ratio'] / 2
-        self.grid_m = data['grid_m']
         self.camera = camera
+        self.art = ()
+        self.gate_cell = ()
+
+    def load_art(self):
+        root = Path(__file__).resolve().parent
+        self.art = tuple(pico2d.load_image(str(root / ART[name]))
+                         for name in ('crypt_art', 'gate_atlas'))
+        atlas = self.art[1]
+        columns = ART['gate_atlas_cols']
+        rows = ceil(len(GATES) * ART['gate_lift_frames'] / columns)
+        if (atlas.w % columns or atlas.h % rows
+                or atlas.h // rows <= ART['gate_anchor_from_bottom_px'] + ART['gate_south_roof_px']):
+            raise ValueError('철창 이미지 시트 크기가 다릅니다.')
+        self.gate_cell = atlas.w // columns, atlas.h // rows
 
     def update(self):
         pass
@@ -37,42 +56,34 @@ class Arena:
                 (1 if y >= 0 else -1) * max(0.0, far_y - half_h))
 
     def draw(self):
+        if not self.art:
+            return
         camera = self.camera
-        # 원 밖에도 월드 좌표에 맞춘 지면을 그리지만 이동 경계는 원 그대로다.
-        left = camera.x - camera.width_m / 2
-        right = camera.x + camera.width_m / 2
-        bottom = camera.y - camera.height_m / 2
-        top = camera.y + camera.height_m / 2
-        for index in range(floor(left / self.grid_m), ceil(right / self.grid_m) + 1):
-            x, _ = camera.to_screen(index * self.grid_m, camera.y)
-            pico2d.draw_line(x, 0, x, camera.height_px, 23, 33, 43)
-        for index in range(floor(bottom / self.grid_m), ceil(top / self.grid_m) + 1):
-            _, y = camera.to_screen(camera.x, index * self.grid_m)
-            pico2d.draw_line(0, y, camera.width_px, y, 23, 33, 43)
-        cx, cy = camera.to_screen(0, 0)
-        radius_px = round(self.radius * camera.pixels_per_meter)
-        pico2d.draw_circle(cx, cy, radius_px, 28, 39, 48, filled=True)
+        center_x, center_y = camera.to_screen(0, 0)
+        scale = self.radius * camera.pixels_per_meter / ART['crypt_radius_px']
+        image = self.art[0]
+        image.clip_draw(0, 0, image.w, image.h, center_x, center_y, image.w * scale, image.h * scale)
 
-        # 1m 격자를 원 내부에만 그린다. 이동과 크기 비교용 기준선.
-        steps = int(ceil(self.radius / self.grid_m))
-        for index in range(-steps, steps + 1):
-            value = index * self.grid_m
-            if abs(value) >= self.radius:
+    def south_gate_roof(self, portal_distance):
+        roof_height = ART['gate_south_roof_px'] * self.radius / ART['crypt_radius_px']
+        return -portal_distance + roof_height / self.camera.floor_y_ratio
+
+    def draw_gates(self, waves, foreground=False):
+        if not self.art:
+            return
+        atlas = self.art[1]
+        width, height = self.gate_cell
+        scale = self.radius * self.camera.pixels_per_meter / ART['crypt_radius_px']
+        columns, frames = ART['gate_atlas_cols'], ART['gate_lift_frames']
+        center_height = (height / 2 - ART['gate_anchor_from_bottom_px']) * scale
+        for direction, (gate_id, gate) in enumerate(GATES.items()):
+            # At the south gate the camera sees the rear, with the walk path behind the arch.
+            if (gate_id == 'south') != foreground:
                 continue
-            reach = sqrt(self.radius ** 2 - value ** 2)
-            color = (62, 82, 91) if index % 5 == 0 else (39, 54, 63)
-            x1, y1 = camera.to_screen(value, -reach)
-            x2, y2 = camera.to_screen(value, reach)
-            pico2d.draw_line(x1, y1, x2, y2, *color)
-            x1, y1 = camera.to_screen(-reach, value)
-            x2, y2 = camera.to_screen(reach, value)
-            pico2d.draw_line(x1, y1, x2, y2, *color)
-        pico2d.draw_circle(cx, cy, radius_px, 122, 176, 184)
-        # 상하좌우 입구 위치만 표시한다. 출현 기능은 아직 구현하지 않는다.
-        for x, y in ((0, self.radius), (0, -self.radius),
-                     (self.radius, 0), (-self.radius, 0)):
-            px, py = camera.to_screen(x, y)
-            pico2d.draw_rectangle(px - 5, py - 5, px + 5, py + 5,
-                                  237, 179, 92, filled=True)
-        pico2d.draw_line(cx - 8, cy, cx + 8, cy, 140, 166, 175)
-        pico2d.draw_line(cx, cy - 8, cx, cy + 8, 140, 166, 175)
+            x, y = self.camera.to_screen(gate['x_ratio'] * waves.portal_distance,
+                                         gate['y_ratio'] * waves.portal_distance)
+            lift = round((frames - 1) * waves.gate_opening(gate_id))
+            row, column = divmod(direction * frames + lift, columns)
+            bottom = atlas.h - (row + 1) * height
+            atlas.clip_draw(column * width, bottom, width, height, x, y + center_height,
+                            width * scale, height * scale)

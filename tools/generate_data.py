@@ -1,6 +1,7 @@
 """데이터 시트를 검증한 뒤 게임에서 사용하는 상수를 생성한다."""
 
 import json
+from math import isfinite
 from pathlib import Path
 from pprint import pformat
 
@@ -55,20 +56,160 @@ def generate():
     data = validate(json.loads((ROOT / 'data/scale.json').read_text(encoding='utf-8')))
     combat = validate_combat(json.loads((ROOT / 'data/combat.json').read_text(encoding='utf-8')), data)
     waves = validate_waves(json.loads((ROOT / 'data/waves.json').read_text(encoding='utf-8')), data, combat)
+    boss = validate_boss(json.loads((ROOT / 'data/boss.json').read_text(encoding='utf-8')), data, waves)
+    presentation = validate_presentation(json.loads((ROOT / 'data/presentation.json').read_text(encoding='utf-8')))
     # 모든 시트 검증이 성공한 뒤에만 코드를 생성한다.
     for sheet, output, content in (('scale', 'game_data.py', data),
                                    ('combat', 'combat_data.py', combat),
-                                   ('waves', 'wave_data.py', waves)):
+                                   ('waves', 'wave_data.py', waves),
+                                   ('boss', 'boss_data.py', boss),
+                                   ('presentation', 'presentation_data.py', presentation)):
         source = f'# 자동 생성 파일: data/{sheet}.json을 수정한 뒤 tools/generate_data.py 실행\n'
         for name, rows in content.items():
             source += f'{name.upper()} = {pformat({row["id"]: row for row in rows}, sort_dicts=False)}\n\n'
         (ROOT / output).write_text(source, encoding='utf-8')
 
 
+def validate_boss(data, scale, waves):
+    schemas = {
+        'bosses': {'character_id', 'wave_id', 'hp', 'scale', 'speed_kmph', 'arrival_s', 'between_attacks_s', 'push_s'},
+        'charges': {'damage', 'energy_ratio', 'guard_damage_ratio', 'guard_push_m', 'windup_s',
+                    'recovery_s', 'recovery_motion_s', 'speed_mps', 'length_m', 'width_m'},
+        'slams': {'damage', 'windup_s', 'recovery_s', 'radius_m', 'eruption_s', 'spikes'},
+        'rocks': {'damage', 'energy_ratio', 'radius_m', 'count', 'flight_s', 'interval_s', 'art'},
+        'swings': {'damage', 'energy_ratio', 'guard_push_diameter_ratio', 'windup_s', 'swing_s',
+                   'recovery_s', 'length_m', 'width_m', 'spread_deg'},
+    }
+    if set(data) != set(schemas):
+        raise ValueError('보스 시트가 누락되었거나 이름이 잘못되었습니다.')
+    for name, columns in schemas.items():
+        rows = data[name]
+        identifier = 'orc' if name == 'bosses' else 'main'
+        if len(rows) != 1 or set(rows[0]) != columns | {'id'} or rows[0]['id'] != identifier:
+            raise ValueError(f'{name}: 누락되거나 잘못된 보스 셀')
+        for key in columns - {'art', 'character_id', 'wave_id'}:
+            value = rows[0][key]
+            if type(value) not in (int, float) or not isfinite(value) or value <= 0:
+                raise ValueError(f'{name}.{key}: 양의 유한 수가 필요합니다.')
+            if key.endswith('_ratio') and value > 1:
+                raise ValueError(f'{name}.{key}: 1 이하의 비율이 필요합니다.')
+    if data['bosses'][0]['character_id'] not in {row['id'] for row in scale['characters']}:
+        raise ValueError('보스의 캐릭터 크기 참조가 잘못되었습니다.')
+    if data['bosses'][0]['wave_id'] not in {row['id'] for row in waves['waves']}:
+        raise ValueError('보스의 웨이브 참조가 잘못되었습니다.')
+    charge = data['charges'][0]
+    if charge['recovery_motion_s'] >= charge['recovery_s']:
+        raise ValueError('돌진 회복 동작이 끝난 뒤 대기 시간이 필요합니다.')
+    rock = data['rocks'][0]
+    slam = data['slams'][0]
+    if type(rock['count']) is not int or not isinstance(rock['art'], str) or not (ROOT / rock['art']).is_file():
+        raise ValueError('낙석 수 또는 이미지가 잘못되었습니다.')
+    if type(slam['spikes']) is not int or slam['eruption_s'] >= rock['flight_s']:
+        raise ValueError('지면 강타의 돌기둥 수 또는 연출 시간이 잘못되었습니다.')
+    if data['swings'][0]['spread_deg'] >= 180:
+        raise ValueError('보스 휘두르기의 각도는 180도보다 작아야 합니다.')
+    return data
+
+
+def validate_presentation(data):
+    schemas = {
+        'arena': {'art', 'water', 'ring_radius_px', 'wall_base_px', 'bank_drop_px', 'bridge_width_m',
+                  'floor_y_ratio', 'crypt_art', 'gate_atlas', 'gate_atlas_cols', 'gate_lift_frames',
+                  'gate_anchor_from_bottom_px', 'gate_south_roof_px', 'crypt_radius_px', 'gate_height_m',
+                  'overview_return_s'},
+        'sprites': {'atlas', 'asset_dir', 'body_height_px', 'projectile_art'},
+        'impact': {'sound', 'volume', 'hitstop_s', 'flash_s', 'player_flash_phase_s', 'number_s', 'rise_m',
+                   'shake_s', 'shake_m', 'max_shake_m'},
+        'parry': {'push_height_ratio', 'push_s', 'raise_s', 'return_s', 'success_hold_s'},
+        'beam': {'taper_width_ratio'},
+    }
+    paths = {'art', 'water', 'atlas', 'asset_dir', 'sound', 'projectile_art',
+             'crypt_art', 'gate_atlas'}
+    rows = data.get('visuals', [])
+    if len(rows) != len(schemas) or {row.get('id') for row in rows} != set(schemas):
+        raise ValueError('화면 연출 시트 누락')
+    for row in rows:
+        if set(row) != schemas[row['id']] | {'id'}:
+            raise ValueError(f'{row["id"]}: 누락되거나 알 수 없는 셀')
+        for field, value in row.items():
+            if field == 'wall_base_px':
+                if (not isinstance(value, list) or len(value) != 64
+                        or any(type(v) is not int or v <= row['ring_radius_px'] + row['bank_drop_px'] for v in value)):
+                    raise ValueError('물길의 석벽 경계가 경기장 안쪽입니다.')
+                continue
+            if field in paths and (not isinstance(value, str) or not value or not (ROOT / value).exists()):
+                raise ValueError(f'{field}: 없는 리소스')
+            if field not in paths | {'id'} and (type(value) not in (int, float) or not isfinite(value) or value <= 0):
+                raise ValueError(f'{field}: 양의 유한 수가 필요합니다')
+        if row['id'] == 'arena' and row['floor_y_ratio'] > 1:
+            raise ValueError('경기장 바닥의 세로 투영은 가로를 넘을 수 없습니다.')
+        if row['id'] == 'arena':
+            gate_pixels = ('gate_atlas_cols', 'gate_lift_frames', 'gate_anchor_from_bottom_px',
+                           'gate_south_roof_px')
+            if any(type(row[key]) is not int for key in gate_pixels) or row['gate_lift_frames'] < 2:
+                raise ValueError('철창 이미지 시트의 칸 수와 기준점이 올바르지 않습니다.')
+    assets = next(row for row in rows if row['id'] == 'sprites')
+    atlas = json.loads((ROOT / assets['atlas']).read_text(encoding='utf-8'))
+    expected = {'hero': {'idle','guard_walk','guard_walk_front','guard','run','parry'},
+                'melee': {'idle','walk','chop','deflected','collapse'},
+                'ranged': {'idle','walk','cast','stagger','ash'},
+                'boss': {'idle','walk','charge','slam','swing','stagger','recover','collapse'}}
+    if atlas['directions'] != ['S','SE','E','NE','N','NW','W','SW'] or atlas['fps'] <= 0:
+        raise ValueError('스프라이트 방향 또는 속도 오류')
+    for clip in atlas['clips']:
+        actor, action = clip['actor'], clip['action']
+        if action not in expected.get(actor,set()) or type(clip['frames']) is not int or clip['frames'] < 1:
+            raise ValueError(f'잘못된 스프라이트 참조: {actor}/{action}')
+        expected[actor].remove(action)
+        width = clip.get('cell_px', atlas['cell_px'])
+        height = clip.get('cell_height_px', width)
+        columns = clip.get('columns', clip['frames'])
+        fps = clip.get('fps', atlas['fps'])
+        origin = clip.get('origin_px', atlas['origin_px'])
+        if (any(type(value) is not int or value <= 0 for value in (width, height, columns, fps))
+                or len(origin) != 2 or any(type(axis) is not int or not 0 <= axis < extent
+                                           for axis, extent in zip(origin, (width, height)))):
+            raise ValueError(f'잘못된 스프라이트 크기 또는 기준점: {actor}/{action}')
+        if actor == 'boss' and action in ('charge', 'slam', 'swing'):
+            phases = clip.get('phases', [])
+            if (len(phases) != (2 if action == 'charge' else 3)
+                    or any(type(count) is not int or count < 1 for count in phases)
+                    or sum(phases) != clip['frames']):
+                raise ValueError(f'보스 스프라이트의 공격 구간이 잘못되었습니다: {action}')
+        if any(type(index) is not int or not 0 <= index < clip['frames']
+               for index in clip.get('idle_frames', ())):
+            raise ValueError(f'대기 스프라이트 참조가 잘못되었습니다: {actor}/{action}')
+        if actor == 'hero' and action in ('guard','guard_walk'):
+            anchors = clip.get('shield_px', [])
+            if (len(anchors) != 8 or any(len(row) != clip['frames'] for row in anchors)
+                    or any(len(point) != 2 or any(type(axis) is not int or not 0 <= axis < atlas['cell_px']
+                                                  for axis in point)
+                           for row in anchors for point in row)):
+                raise ValueError(f'방패 발사점 누락: {action}')
+        source = (ROOT / assets['atlas']).parent / clip['file']
+        if not source.is_file() or not (ROOT / assets['asset_dir'] / f'{actor}-{action}-flash.png').is_file():
+            raise ValueError(f'스프라이트 파일 누락: {actor}/{action}')
+    if any(expected.values()):
+        raise ValueError('필수 캐릭터 동작 누락')
+    impact = next(row for row in rows if row['id'] == 'impact')
+    if not impact['hitstop_s'] < impact['flash_s'] < impact['number_s'] or impact['volume'] > 128:
+        raise ValueError('피격 연출 길이 또는 음량 오류')
+    if not impact['hitstop_s'] < impact['player_flash_phase_s'] < impact['number_s'] / 3:
+        raise ValueError('플레이어 피격 점멸 타이밍 오류')
+    if impact['max_shake_m'] <= impact['shake_m']:
+        raise ValueError('최대 광선의 흔들림이 기본보다 작습니다')
+    beam = next(row for row in rows if row['id'] == 'beam')
+    if beam['taper_width_ratio'] >= .5:
+        raise ValueError('광선 시작부는 끝이 둔각이어야 합니다.')
+    return data
+
+
 def validate_waves(data, scale, combat):
     from math import isfinite
     schemas = {
-        'settings': {'id', 'spawn_interval_s'},
+        'settings': {'id', 'time_limit_s', 'arrival_interval_s', 'gate_wait_s', 'gate_lift_s', 'portal_offset_m',
+                     'bridge_inset_m', 'entrance_speed_mps', 'reveal_m', 'enemy_gap_m',
+                     'enemy_detection_diameter_ratio'},
         'waves': {'id', 'number', 'melee_id', 'ranged_id', 'melee_per_gate', 'ranged_per_gate'},
         'modes': {'id', 'key'},
         'single_modes': {'id', 'enemy_id', 'count'},
@@ -103,9 +244,14 @@ def validate_waves(data, scale, combat):
         raise ValueError('1~4 웨이브가 필요합니다.')
     if {row['id']: row['key'] for row in data['modes']} != {'all': 0, 'melee': 8, 'ranged': 9}:
         raise ValueError('디버그 모드 키 설정이 잘못되었습니다.')
-    if {row['id']: (row['x_ratio'], row['y_ratio']) for row in data['gates']} != {
-            'north': (0, 1), 'south': (0, -1), 'west': (-1, 0), 'east': (1, 0)}:
-        raise ValueError('상하좌우 입구가 필요합니다.')
+    if [(row['id'], row['x_ratio'], row['y_ratio']) for row in data['gates']] != [
+            ('north', 0, 1), ('east', 1, 0), ('south', 0, -1), ('west', -1, 0)]:
+        raise ValueError('상우하좌 순서의 입구가 필요합니다.')
+    entry = data['settings'][0]
+    if entry['reveal_m'] >= entry['portal_offset_m']:
+        raise ValueError('등장 마스크는 경기장 경계 전에 끝나야 합니다.')
+    if entry['enemy_detection_diameter_ratio'] > 1:
+        raise ValueError('적 감지 반경은 경기장 지름 이하여야 합니다.')
     melee_ids = {row['id'] for row in combat['enemies']}
     ranged_ids = {row['id'] for row in data['ranged']}
     if [row['id'] for row in data['single_modes']] != ['none', 'melee', 'ranged']:
@@ -122,12 +268,17 @@ def validate_waves(data, scale, combat):
             if type(row[field]) is not int or row[field] < 0:
                 raise ValueError('웨이브 번호와 마릿수는 음수가 아닌 정수여야 합니다.')
         if row['number'] == 4 and row['melee_per_gate'] + row['ranged_per_gate'] != 0:
-            raise ValueError('보스 미구현 4웨이브는 비어 있어야 합니다.')
+            raise ValueError('보스 웨이브에는 일반 적의 새 입장이 없어야 합니다.')
     characters = {row['id']: row for row in scale['characters']}
+    heights = {row['id']: row['height_m'] for row in scale['viewports']}
+    tallest = max(heights[row['viewport_id']] * row['height_ratio'] for row in characters.values())
+    line_gap = len(data['gates']) * entry['arrival_interval_s'] * entry['entrance_speed_mps']
+    if line_gap < tallest + entry['enemy_gap_m']:
+        raise ValueError('입구 대기열에서 적 사이 간격이 부족합니다.')
     for row in data['ranged']:
         if row['character_id'] not in characters:
             raise ValueError('존재하지 않는 원거리 캐릭터 참조')
-        if not combat['systems'][0]['guard_kmph'] < row['speed_kmph'] < characters[row['character_id']]['speed_kmph']:
+        if row['speed_kmph'] >= characters[row['character_id']]['speed_kmph']:
             raise ValueError('원거리 적 이동 속도 관계가 잘못되었습니다.')
     return data
 
@@ -135,12 +286,13 @@ def validate_waves(data, scale, combat):
 def validate_combat(data, scale):
     from math import isfinite
     schemas = {
-        'systems': {'id', 'player_hp', 'guard_kmph', 'input_lock_s', 'success_invuln_s',
-                    'hit_invuln_s', 'stun_s', 'guard_angle_deg', 'energy_max',
+        'systems': {'id', 'player_hp', 'heal_per_kill', 'guard_kmph', 'input_lock_s', 'parry_move_lock_s',
+                    'success_invuln_s', 'hit_invuln_s', 'stun_s', 'guard_angle_deg',
+                    'guard_walk_angle_deg', 'parry_radius_m', 'parry_push_range_m', 'energy_max',
                     'damage_multiplier', 'beam_duration_s', 'beam_tick_s', 'step_s'},
         'stages': {'id', 'energy_min', 'parry_window_s', 'beam_width_m'},
         'enemies': {'id', 'character_id', 'hp', 'speed_kmph', 'damage', 'energy_gain',
-                    'stop_m', 'windup_s', 'swing_s', 'recovery_s', 'sword_length_m',
+                    'attack_gap_m', 'windup_s', 'swing_s', 'recovery_s', 'sword_length_m',
                     'sword_width_m', 'sweep_deg'},
     }
     if set(data) != set(schemas):
@@ -171,21 +323,25 @@ def validate_combat(data, scale):
         raise ValueError('축적 단계 경계가 중복되거나 순서가 잘못되었습니다.')
     if stages[0]['energy_min'] != 0 or stages[-1]['energy_min'] >= system['energy_max']:
         raise ValueError('단계 경계가 에너지 범위를 벗어납니다.')
-    if any(s['parry_window_s'] > system['input_lock_s'] for s in stages):
-        raise ValueError('패링 구간이 입력 잠금보다 깁니다.')
+    if (system['parry_move_lock_s'] > system['input_lock_s']
+            or any(s['parry_window_s'] > system['parry_move_lock_s'] for s in stages)):
+        raise ValueError('패링 구간, 위치 고정, 입력 잠금 순서가 잘못되었습니다.')
     if any(a['parry_window_s'] <= b['parry_window_s'] for a, b in zip(stages, stages[1:])):
         raise ValueError('축적 단계가 높을수록 패링 구간은 짧아야 합니다.')
-    if not 0 < system['guard_angle_deg'] <= 360 or system['step_s'] > 1 / 60:
+    if (not 0 < system['guard_angle_deg'] <= system['guard_walk_angle_deg'] <= 360
+            or system['step_s'] > 1 / 60):
         raise ValueError('방어 각도 또는 전투 갱신 간격이 잘못되었습니다.')
     if system['beam_duration_s'] <= system['beam_tick_s'] * 2:
         raise ValueError('광선 지속 시간이 세 번째 타격 전에 끝납니다.')
     characters = {r['id']: r for r in scale['characters']}
+    if system['guard_kmph'] >= characters['player']['speed_kmph']:
+        raise ValueError('기본 방어 이동 속도는 달리기보다 느려야 합니다.')
     enemies = {r['id']: r for r in data['enemies']}
     for enemy in enemies.values():
         if enemy['character_id'] not in characters:
             raise ValueError('존재하지 않는 캐릭터 참조')
-        if not system['guard_kmph'] < enemy['speed_kmph'] < characters[enemy['character_id']]['speed_kmph']:
-            raise ValueError('기본 방어 < 적 < 일반 이동 속도 관계가 잘못되었습니다.')
+        if enemy['speed_kmph'] >= characters[enemy['character_id']]['speed_kmph']:
+            raise ValueError('근접 적 이동 속도는 달리기보다 느려야 합니다.')
     return data
 
 

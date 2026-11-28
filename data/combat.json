@@ -1,14 +1,14 @@
 {
   "systems": [
-    {"id": "main", "player_hp": 100, "guard_kmph": 7, "input_lock_s": 1, "success_invuln_s": 1, "hit_invuln_s": 0.5, "stun_s": 1.5, "guard_angle_deg": 90, "energy_max": 40, "damage_multiplier": 0.5, "beam_duration_s": 1.5, "beam_tick_s": 0.5, "step_s": 0.004166666666666667}
+    {"id": "main", "player_hp": 100, "heal_per_kill": 5, "guard_kmph": 14, "input_lock_s": 1, "parry_move_lock_s": 0.5, "success_invuln_s": 0.5, "hit_invuln_s": 0.5, "stun_s": 1.5, "guard_angle_deg": 90, "guard_walk_angle_deg": 180, "parry_radius_m": 4.6, "parry_push_range_m": 2.4, "energy_max": 40, "damage_multiplier": 0.5, "beam_duration_s": 1.5, "beam_tick_s": 0.5, "step_s": 0.004166666666666667}
   ],
   "stages": [
-    {"id": "stage1", "energy_min": 0, "parry_window_s": 0.30, "beam_width_m": 1.8},
-    {"id": "stage2", "energy_min": 10, "parry_window_s": 0.22, "beam_width_m": 1.8},
-    {"id": "stage3", "energy_min": 20, "parry_window_s": 0.15, "beam_width_m": 1.8},
-    {"id": "stage4", "energy_min": 30, "parry_window_s": 0.10, "beam_width_m": 3.6}
+    {"id": "stage1", "energy_min": 0, "parry_window_s": 0.34, "beam_width_m": 2.1},
+    {"id": "stage2", "energy_min": 10, "parry_window_s": 0.26, "beam_width_m": 2.1},
+    {"id": "stage3", "energy_min": 20, "parry_window_s": 0.18, "beam_width_m": 2.1},
+    {"id": "stage4", "energy_min": 30, "parry_window_s": 0.13, "beam_width_m": 4.2}
   ],
   "enemies": [
-    {"id": "melee", "character_id": "player", "hp": 60, "speed_kmph": 10, "damage": 10, "energy_gain": 10, "stop_m": 1.6, "windup_s": 0.6, "swing_s": 0.25, "recovery_s": 0.8, "sword_length_m": 2, "sword_width_m": 0.25, "sweep_deg": 90}
+    {"id": "melee", "character_id": "player", "hp": 60, "speed_kmph": 10, "damage": 10, "energy_gain": 10, "attack_gap_m": 0.45, "windup_s": 0.6, "swing_s": 0.25, "recovery_s": 0.8, "sword_length_m": 3.4, "sword_width_m": 1, "sweep_deg": 90}
   ]
 }

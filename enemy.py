@@ -1,16 +1,26 @@
 """방향을 고정한 뒤 회전하는 칼 히트박스로 한 번 공격하는 근접 적."""
 
-from math import atan2, hypot, radians
+from math import atan2, cos, hypot, pi, radians, sin
 
 import pico2d
 
 import game_framework
+from enemy_awareness import EnemyAwareness
 from game_data import CHARACTERS, VIEWPORTS
-from geometry import box_points, draw_polygon, draw_sector, intersects, oriented_box
-from enemy_spacing import move_enemy
+from geometry import box_points, intersects, oriented_box, draw_sweep_warning, warning_strength
+from enemy_spacing import move_enemy, safe_step
+from presentation_data import VISUALS
+from sprites import clip_duration
+from wave_data import SETTINGS
 
 
 class MeleeEnemy:
+    sprite_actor = 'melee'
+    death_action = 'collapse'
+    recoil_action = 'deflected'
+    takes_space_priority = True
+    yields_space = False
+
     def __init__(self, identifier, data, x, y, player):
         self.identifier, self.data, self.player = identifier, data, player
         self.x, self.y = x, y
@@ -25,10 +35,20 @@ class MeleeEnemy:
         self.attack_id = None
         self.hit = False
         self.stun_duration = 0.0
+        self.recoil_age = None
+        self.recoil_angle = 0.0
+        self.visual_time = 0.0
+        self.moving = False
+        self.death_age = 0.0
+        detection_radius = 2 * player.arena.radius * SETTINGS['main']['enemy_detection_diameter_ratio']
+        self.awareness = EnemyAwareness(detection_radius, player.height)
 
     def get_bb(self):
         return (self.x - self.width / 2, self.y - self.height / 2,
                 self.x + self.width / 2, self.y + self.height / 2)
+
+    def constrain_position(self, x, y):
+        return self.player.constrain_position(x, y)
 
     def stun(self, duration):
         if self.hp > 0:
@@ -36,11 +56,52 @@ class MeleeEnemy:
             self.stun_duration = duration
             self.attack_id = None
 
+    def start_parry_recoil(self):
+        if self.hp <= 0:
+            return
+        dx, dy = self.x - self.player.x, self.y - self.player.y
+        self.recoil_angle = atan2(dy, dx) if dx or dy else self.angle + pi
+        self.recoil_age = 0.0
+        self.moving = False
+
+    def advance_recoil(self, dt):
+        if self.recoil_age is None:
+            return False
+        settings = VISUALS['parry']
+        duration = settings['push_s']
+        old = min(1.0, self.recoil_age / duration)
+        self.recoil_age += dt
+        progress = min(1.0, self.recoil_age / duration)
+        travel = self.height * settings['push_height_ratio'] * ((1 - old)**1.3 - (1 - progress)**1.3)
+        safe_step(self, cos(self.recoil_angle) * travel, sin(self.recoil_angle) * travel)
+        if self.recoil_age > duration + 1 / 16:
+            self.recoil_age = None
+        return old < 1
+
     def take_damage(self, amount):
+        if self.hp <= 0:
+            return
+        previous = self.hp
         self.hp = max(0, self.hp - amount)
+        if self.player.effects:
+            self.player.effects.damage(self, previous - self.hp)
         if self.hp == 0:
             self.state = 'dead'
             self.attack_id = None
+
+    def walk_toward(self, dx, dy, dt):
+        pos = (self.x, self.y)
+        move_enemy(self, dx, dy, priority=self.takes_space_priority)
+        self.moving = hypot(self.x - pos[0], self.y - pos[1]) > 1e-9
+        self.visual_time = self.visual_time + dt if self.moving else 0.0
+
+    def approach(self, dx, dy, distance, dt, stop_distance=0.0):
+        if distance <= stop_distance:
+            self.moving, self.visual_time = False, 0.0
+            return
+        self.angle = atan2(dy, dx)
+        step = min(distance - stop_distance, self.data['speed_kmph'] / 3.6 * dt)
+        self.walk_toward(dx / distance * step, dy / distance * step, dt)
 
     def sword_polygon(self):
         progress = min(1.0, self.age / self.data['swing_s'])
@@ -49,25 +110,50 @@ class MeleeEnemy:
         return oriented_box(self.x, self.y, angle,
                             self.data['sword_length_m'], self.data['sword_width_m'])
 
+    def attack_distance(self, angle):
+        # Distance between centers once the body boxes almost touch along the approach.
+        across = (self.width + self.player.width) / 2
+        along = (self.height + self.player.height) / 2
+        contact = min(across / max(abs(cos(angle)), 1e-9),
+                      along / max(abs(sin(angle)), 1e-9))
+        return contact + self.data['attack_gap_m']
+
     def resolve_sword(self):
-        if not self.hit and intersects(self.sword_polygon(), box_points(self.player.get_bb())):
+        if self.hit:
+            return
+        sword = self.sword_polygon()
+        combat = self.player.combat
+        if intersects(sword, box_points(self.player.get_bb())):
             self.hit = True
-            self.player.combat.receive(self.attack_id, self, self.data['damage'], self.data['energy_gain'])
+            combat.receive(self.attack_id, self, self.data['damage'], self.data['energy_gain'])
+        elif (area := combat.parry_area(self)) and intersects(sword, area):
+            self.hit = combat.try_parry(self.attack_id, self, self.data['energy_gain'])
 
     def update(self):
-        if self.hp <= 0 or self.player.combat.hp <= 0:
+        if self.hp <= 0:
+            self.death_age += game_framework.frame_time
+            return
+        if self.player.combat.hp <= 0:
             return
         dt = game_framework.frame_time
+        visible = self.awareness.observe(self)
+        recoiling = self.advance_recoil(dt)
+        if recoiling and self.state != 'stunned':
+            return
         if self.state == 'chase':
+            if not visible:
+                self.awareness.search(self, dt)
+                return
             dx, dy = self.player.x - self.x, self.player.y - self.y
             distance = hypot(dx, dy)
-            if distance > self.data['stop_m'] + 1e-9:
-                step = min(distance - self.data['stop_m'], self.data['speed_kmph'] / 3.6 * dt)
-                # 적의 발밑도 플레이어와 같은 원 경계를 사용한다.
-                move_enemy(self, dx / distance * step, dy / distance * step)
+            if distance > 0:
+                self.angle = atan2(dy, dx)
+            attack_distance = self.attack_distance(self.angle)
+            if distance > attack_distance + 1e-9:
+                self.approach(dx, dy, distance, dt, attack_distance)
             else:
                 self.state, self.age = 'windup', 0.0
-                self.angle = atan2(dy, dx)
+                self.moving, self.visual_time = False, 0.0
             return
         self.age += dt
         if self.state == 'stunned':
@@ -87,21 +173,43 @@ class MeleeEnemy:
         elif self.state == 'recovery' and self.age + 1e-9 >= self.data['recovery_s']:
             self.state, self.age = 'chase', 0.0
 
+    def pose(self):
+        if self.recoil_age is not None:
+            return self.recoil_action, self.recoil_age / VISUALS['parry']['push_s'] * 12
+        if self.state == 'windup':
+            return 'chop', 6 * self.age / self.data['windup_s']
+        if self.state == 'swing':
+            frame = 6 + 3 * self.age / self.data['swing_s']
+            return 'chop', max(8, frame) if self.hit else frame
+        if self.state == 'recovery':
+            return 'chop', 9 + 6 * self.age / self.data['recovery_s']
+        return ('walk' if self.moving and self.state == 'chase' else 'idle'), None
+
+    def draw_warning(self):
+        if self.state == 'windup' and self.recoil_age is None:
+            opacity = warning_strength(self.age, self.data['windup_s'])
+            if opacity > 0:
+                draw_sweep_warning(self.x, self.y, self.angle,
+                                   self.data['sword_length_m'], self.data['sword_width_m'],
+                                   radians(self.data['sweep_deg']), self.player.camera, opacity)
+
     def draw(self):
-        if self.hp <= 0:
+        flash = self.player.effects and self.player.effects.flashing(self)
+        if not self.player.sprites:
             return
         camera = self.player.camera
-        color = (224, 114, 99) if self.state != 'stunned' else (167, 137, 220)
-        left, bottom, right, top = self.get_bb()
-        x1, y1 = camera.to_screen(left, bottom)
-        x2, y2 = camera.to_screen(right, top)
-        pico2d.draw_rectangle(x1, y1, x2, y2, *color, filled=True)
-        pico2d.draw_rectangle(x1, y1, x2, y2, 255, 212, 194)
-        pico2d.draw_rectangle(x1, y2 + 4, x2, y2 + 7, 64, 40, 43, filled=True)
-        pico2d.draw_rectangle(x1, y2 + 4, x1 + (x2 - x1) * self.hp / self.data['hp'],
-                              y2 + 7, 237, 116, 113, filled=True)
-        if self.state in ('windup', 'swing'):
-            draw_sector(self.x, self.y, self.angle, self.data['sword_length_m'],
-                        radians(self.data['sweep_deg']), camera, (216, 138, 70))
-        if self.state == 'swing':
-            draw_polygon(self.sword_polygon(), camera, (255, 238, 146))
+        if self.hp <= 0:
+            if self.death_age < clip_duration(self.sprite_actor, self.death_action):
+                self.player.sprites.draw(self.sprite_actor, self.death_action, self, camera,
+                                         self.angle, self.death_age, flash=flash)
+            return
+        motion, frame = self.pose()
+        self.player.sprites.draw(self.sprite_actor, motion, self, camera, self.angle,
+                                 self.visual_time, frame, flash)
+        if 0 < self.hp < self.data['hp']:
+            left, _, right, top = self.get_bb()
+            x1, y = camera.to_screen(left, top)
+            x2, _ = camera.to_screen(right, top)
+            pico2d.draw_rectangle(x1, y + 3, x2, y + 6, 64, 40, 43, filled=True)
+            pico2d.draw_rectangle(x1, y + 3, x1 + (x2 - x1) * self.hp / self.data['hp'],
+                                  y + 6, 237, 116, 113, filled=True)

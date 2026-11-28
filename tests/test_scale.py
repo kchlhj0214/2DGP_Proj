@@ -26,8 +26,12 @@ import game_world
 import play_mode
 from arena import Arena
 from camera import Camera
+from combat_data import ENEMIES
+from enemy import MeleeEnemy
 from game_data import ARENAS, CHARACTERS, VIEWPORTS
 from player import Player
+from ranged_enemy import RangedEnemy
+from wave_data import RANGED
 
 
 def scene(width=1920, height=1080):
@@ -43,15 +47,19 @@ def key(player, event_type, code):
     player.handle_event(event)
 
 
-def capture_png(path, width, height):
-    """실제로 그린 SDL 렌더 버퍼를 PNG로 저장한다. 합성 이미지가 아니다."""
+def read_canvas(width, height):
     pixels = ctypes.create_string_buffer(width * height * 4)
     result = pico2d.SDL_RenderReadPixels(canvas.renderer, None,
                                         pico2d.SDL_PIXELFORMAT_RGBA32,
                                         pixels, width * 4)
     if result != 0:
         raise RuntimeError(pico2d.SDL_GetError())
-    raw = pixels.raw
+    return pixels.raw
+
+
+def capture_png(path, width, height):
+    """실제로 그린 SDL 렌더 버퍼를 PNG로 저장한다. 합성 이미지가 아니다."""
+    raw = read_canvas(width, height)
     rows = b''.join(b'\0' + raw[y * width * 4:(y + 1) * width * 4]
                     for y in range(height))
 
@@ -99,9 +107,14 @@ class ScaleTests(unittest.TestCase):
         for width, height in ((1280, 720), (1920, 1080), (2560, 1440), (1280, 1024)):
             arena, player, camera = scene(width, height)
             ppm = camera.pixels_per_meter
-            self.assertAlmostEqual(arena.radius * 2 * ppm, height * 1.75)
-            self.assertAlmostEqual(player.height * ppm, height * .05)
-            self.assertAlmostEqual(player.width / player.height, .5)
+            self.assertAlmostEqual(arena.radius * 2 * ppm, height * 1.9)
+            melee = MeleeEnemy('melee', ENEMIES['melee'], 0, 0, player)
+            ranged = RangedEnemy('ranged', RANGED['ranged'], 0, 0, player, None)
+            for actor in (player, melee, ranged):
+                self.assertAlmostEqual(actor.height * ppm, height * 2 / 15)
+                left, bottom, right, top = actor.get_bb()
+                self.assertAlmostEqual(right - left, 2.4)
+                self.assertAlmostEqual(top - bottom, 4.8)
             self.assertEqual(camera.to_screen(0, 0), (width / 2, height / 2))
 
     def test_equal_elapsed_time_gives_equal_distance(self):
@@ -114,7 +127,7 @@ class ScaleTests(unittest.TestCase):
                 game_framework.frame_time = 1 / fps
                 for _ in range(fps * 3):
                     player.update()
-                self.assertAlmostEqual(hypot(player.x, player.y), 14 / 3.6 * 3)
+                self.assertAlmostEqual(hypot(player.x, player.y), 22 / 3.6 * 3)
 
     def test_irregular_frames_and_key_release(self):
         _, player, _ = scene()
@@ -213,11 +226,29 @@ class RenderTests(unittest.TestCase):
         pico2d.open_canvas(1280, 720)
         try:
             play_mode.init()
+            play_mode.waves.single_mode = 'none'
+            play_mode.waves.load()
             play_mode.render()
             raw = capture_png(ROOT / 'shots/arena-center.png', 1280, 720)
-            pixel = lambda x, y: tuple(raw[(y * 1280 + x) * 4:(y * 1280 + x) * 4 + 3])
-            self.assertEqual(pixel(640, 354), (64, 208, 192))
-            self.assertEqual(pixel(1, 1), (13, 20, 29))
+            def shows_centered_sprite(raw):
+                # Subtract the same camera view to isolate the rendered player
+                # even at the boundary where the water is dark as well.
+                with patch.object(play_mode.player, 'draw'):
+                    play_mode.render()
+                    background = read_canvas(1280, 720)
+                changed = []
+                for y in range(255, 465):
+                    for x in range(540, 741):
+                        offset = (y * 1280 + x) * 4
+                        if raw[offset:offset + 3] != background[offset:offset + 3]:
+                            changed.append((x, y))
+                self.assertTrue(changed, 'No actor was drawn near the camera center')
+                height = max(y for _, y in changed) - min(y for _, y in changed) + 1
+                self.assertGreaterEqual(height, 87)
+                self.assertLessEqual(height, 107)
+                self.assertLess(min(x for x, _ in changed), 640)
+                self.assertGreater(max(x for x, _ in changed), 640)
+            shows_centered_sprite(raw)
             event = pico2d.Event(pico2d.SDL_KEYDOWN)
             event.key = pico2d.SDLK_w
             with patch.object(pico2d, 'get_events', return_value=[event]), \
@@ -226,7 +257,7 @@ class RenderTests(unittest.TestCase):
             game_framework.frame_time = 1 / 60
             for _ in range(60):
                 play_mode.update()
-            self.assertAlmostEqual(play_mode.player.y, 14 / 3.6)
+            self.assertAlmostEqual(play_mode.player.y, 22 / 3.6)
             self.assertEqual(play_mode.camera.to_screen(play_mode.player.x, play_mode.player.y),
                              (640, 360))
             with patch.object(pico2d, 'get_events', return_value=[]), \
@@ -240,11 +271,10 @@ class RenderTests(unittest.TestCase):
             play_mode.camera.follow(play_mode.player)
             play_mode.render()
             boundary_raw = capture_png(ROOT / 'shots/arena-boundary.png', 1280, 720)
-            def boundary_pixel(x, y):
-                offset = (y * 1280 + x) * 4
-                return tuple(boundary_raw[offset:offset + 3])
-            self.assertEqual(boundary_pixel(640, 354), (64, 208, 192))
-            self.assertIn(boundary_pixel(1278, 1), ((13, 20, 29), (23, 33, 43)))
+            shows_centered_sprite(boundary_raw)
+            self.assertTrue(any(r < 65 and 55 < g < 120 and b > g
+                                for r,g,b in zip(boundary_raw[::4],boundary_raw[1::4],boundary_raw[2::4])),
+                            'Water is not visible beyond the boundary')
             # 종료 이벤트가 프레임워크에 전달되는지도 확인한다.
             game_framework.running = True
             with patch.object(pico2d, 'get_events', return_value=[pico2d.Event(pico2d.SDL_QUIT)]):

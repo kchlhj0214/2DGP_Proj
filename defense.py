@@ -1,10 +1,11 @@
 """입력 잠금, 패링, 기본 방어, 무적과 에너지를 분리한 전투 상태."""
 
-from math import atan2, cos, pi, radians
+from math import atan2, cos, hypot, pi, radians
 
 from beam import Beam
 from combat_data import STAGES, SYSTEMS
-from geometry import draw_sector
+from geometry import draw_sector, sector_points
+from presentation_data import VISUALS
 
 
 class PlayerCombat:
@@ -24,6 +25,7 @@ class PlayerCombat:
         self.success = False
         self.stunned_one = False
         self.failure_reported = False
+        self.parry_hit_at = None
         self.beam = None
         self.resolved = set()
         self.events = []
@@ -33,6 +35,11 @@ class PlayerCombat:
     def stage(self):
         return next(row for row in reversed(list(STAGES.values()))
                     if self.energy >= row['energy_min'])
+
+    def heal_on_kill(self):
+        maximum = self.settings['player_hp']
+        if 0 < self.hp < maximum:
+            self.hp = min(maximum, self.hp + self.settings['heal_per_kill'])
 
     def feedback(self, result):
         self.message = result.upper()
@@ -51,6 +58,7 @@ class PlayerCombat:
         self.success = False
         self.stunned_one = False
         self.failure_reported = False
+        self.parry_hit_at = None
 
     def right_up(self):
         self.right_held = False
@@ -64,8 +72,30 @@ class PlayerCombat:
         self.energy = 0
         self.state = 'beam'
         self.beam = Beam(self.owner, energy, stage, self.settings)
+        if self.owner.effects:
+            self.owner.effects.beam(stage['id'] == 'stage4')
         self.feedback('beam')
         return True
+
+    def parry_frame(self):
+        elapsed = self.time - self.started
+        motion = VISUALS['parry']
+        peak_at = motion['raise_s']
+        if self.parry_hit_at is not None:
+            peak_at = max(peak_at, self.parry_hit_at) + motion['success_hold_s']
+            if elapsed <= peak_at:
+                return 8
+        elif elapsed <= peak_at:
+            return 8 * (elapsed / peak_at) ** .75
+        return 8 + 7 * min(1, (elapsed - peak_at) / motion['return_s'])
+
+    def position_lock_remaining(self):
+        if self.state != 'raising':
+            return 0.0
+        return max(0.0, self.settings['parry_move_lock_s'] - (self.time - self.started))
+
+    def parry_active(self):
+        return self.state == 'raising' and self.time - self.started < self.window - 1e-9
 
     def advance(self, dt):
         self.time += dt
@@ -83,54 +113,110 @@ class PlayerCombat:
         if self.state == 'beam' and not self.beam.active:
             self.state = 'free'
 
-    def front(self, source):
-        direction = getattr(source, 'incoming_angle',
-                            atan2(source.y - self.owner.y, source.x - self.owner.x))
-        delta = direction - self.aim
-        return cos(delta) >= cos(radians(self.settings['guard_angle_deg']) / 2) - 1e-9
+    def walking_guard(self):
+        return self.state == 'guard' and self.owner.moving
 
-    def receive(self, attack_id, source, damage, energy_gain):
+    def guard_arc(self):
+        setting = 'guard_walk_angle_deg' if self.walking_guard() else 'guard_angle_deg'
+        return radians(self.settings[setting])
+
+    def front(self, source):
+        return self.faces(self.incoming_direction(source))
+
+    def incoming_direction(self, source):
+        return getattr(source, 'incoming_angle',
+                       atan2(source.y - self.owner.y, source.x - self.owner.x))
+
+    def faces(self, direction):
+        delta = direction - self.aim
+        return cos(delta) >= cos(self.guard_arc() / 2) - 1e-9
+
+    def can_parry(self, source, facing=None):
+        return (self.hp > 0 and self.time >= self.hit_invuln_until - 1e-9
+                and self.parry_active() and (self.front(source) if facing is None else facing))
+
+    def parry_area(self, source, *, facing=None):
+        if not self.can_parry(source, facing):
+            return ()
+        return sector_points(self.owner.x, self.owner.y, self.aim,
+                             self.settings['parry_radius_m'], self.guard_arc())
+
+    def push_parried_enemies(self):
+        left, bottom, right, top = self.owner.get_bb()
+        reach = self.settings['parry_push_range_m']
+        for enemy in self.owner.targets:
+            if enemy.hp <= 0 or not self.front(enemy):
+                continue
+            x1, y1, x2, y2 = enemy.get_bb()
+            dx = max(0.0, left - x2, x1 - right)
+            dy = max(0.0, bottom - y2, y1 - top)
+            if hypot(dx, dy) <= reach + 1e-9:
+                enemy.start_parry_recoil()
+
+    def try_parry(self, attack_id, source, energy_gain, *, facing=None):
+        if attack_id in self.resolved or not self.can_parry(source, facing):
+            return False
+        self.resolved.add(attack_id)
+        self.energy = min(self.settings['energy_max'], self.energy + energy_gain)
+        if not self.success:
+            self.success_invuln_until = self.time + self.settings['success_invuln_s']
+            self.parry_hit_at = self.time - self.started
+            self.push_parried_enemies()
+        self.success = True
+        if not self.stunned_one and getattr(source, 'can_be_stunned', True):
+            source.stun(self.settings['stun_s'])
+            self.stunned_one = True
+        self.feedback('parry')
+        return True
+
+    def receive(self, attack_id, source, damage, energy_gain, *, guard_damage_ratio=0, guard_push_m=0,
+                guard_push_s=0, facing=None):
         if self.hp <= 0 or attack_id in self.resolved:
             return 'ignored'
+        facing = self.front(source) if facing is None else facing
+        if self.try_parry(attack_id, source, energy_gain, facing=facing):
+            return 'parry'
         self.resolved.add(attack_id)
-        in_window = (self.state == 'raising'
-                     and self.time - self.started < self.window - 1e-9)
         # 일반 피격 보호 중에는 새 패링으로 축적하지 않는다.
         if self.time < self.hit_invuln_until - 1e-9:
             return 'invulnerable'
-        if in_window and self.front(source):
-            self.energy = min(self.settings['energy_max'], self.energy + energy_gain)
-            if not self.success:
-                self.success_invuln_until = self.time + self.settings['success_invuln_s']
-            self.success = True
-            if not self.stunned_one and getattr(source, 'can_be_stunned', True):
-                source.stun(self.settings['stun_s'])
-                self.stunned_one = True
-            self.feedback('parry')
-            return 'parry'
         if self.time < self.success_invuln_until - 1e-9:
             return 'invulnerable'
-        if self.state == 'guard' and self.front(source):
+        if self.state == 'guard' and facing:
+            if guard_push_m:
+                direction = self.incoming_direction(source)
+                self.owner.start_knockback(direction + pi, guard_push_m, guard_push_s)
+            if guard_damage_ratio:
+                self.take_damage(damage * guard_damage_ratio)
             self.feedback('block')
             return 'block'
-        self.hp = max(0, self.hp - damage)
-        self.hit_invuln_until = self.time + self.settings['hit_invuln_s']
+        self.take_damage(damage)
         self.feedback('hit')
+        return 'hit'
+
+    def take_damage(self, damage):
+        previous = self.hp
+        self.hp = max(0, self.hp - damage)
+        if self.owner.effects:
+            self.owner.effects.damage(self.owner, previous - self.hp, player_hit=True)
+        self.hit_invuln_until = self.time + self.settings['hit_invuln_s']
         if self.hp == 0:
             self.state = 'dead'
             self.owner.pressed_keys.clear()
             self.beam = None
-        return 'hit'
 
     def draw(self):
-        if self.state in ('raising', 'guard'):
+        raising = self.position_lock_remaining() > 1e-9
+        if self.state == 'guard' or raising:
             color = (101, 185, 248) if self.state == 'guard' else (239, 166, 76)
-            if self.state == 'raising' and self.time - self.started < self.window:
+            if self.parry_active():
                 color = (111, 255, 169)
-            draw_sector(self.owner.x, self.owner.y, self.aim, 1.5,
-                        radians(self.settings['guard_angle_deg']), self.owner.camera, color)
+            if raising:
+                radius = self.settings['parry_radius_m']
+            else:
+                radius = self.owner.height * .65 if self.walking_guard() else 1.5
+            draw_sector(self.owner.x, self.owner.y, self.aim, radius,
+                        self.guard_arc(), self.owner.camera, color)
         if self.time < self.success_invuln_until:
             draw_sector(self.owner.x, self.owner.y, 0, 1.2, 2 * pi,
                         self.owner.camera, (168, 249, 187))
-        if self.beam:
-            self.beam.draw()

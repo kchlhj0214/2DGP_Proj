@@ -1,9 +1,11 @@
-"""Python + pico2d 도형 전투 훈련의 실행점."""
+"""Shield Attack entry point."""
 
 from ctypes import byref
+from pathlib import Path
 
 import pico2d
 
+import game_audio
 import game_framework
 from tools.generate_data import generate
 
@@ -25,8 +27,12 @@ def main():
     # 항상 시트 검증과 코드 생성을 먼저 마친다.
     generate()
     import play_mode
+    from main_menu import MAIN_MENU
 
     from game_data import VIEWPORTS
+
+    report = Path.cwd() / 'patch-test.txt'
+    play_mode.test_path = report if report.is_file() else None
 
     viewport = VIEWPORTS['main']
     desktop_width, desktop_height = desktop_size()
@@ -37,7 +43,8 @@ def main():
     height = int(viewport['window_height_px'] * scale)
     pico2d.open_canvas(width, height, sync=True, full=False)
     try:
-        game_framework.run(play_mode)
+        game_audio.set_volume(game_audio.volume)
+        game_framework.run(play_mode if play_mode.test_path is not None else MAIN_MENU)
     finally:
         pico2d.close_canvas()
 

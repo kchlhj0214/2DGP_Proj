@@ -2,8 +2,6 @@
 
 from math import cos, hypot, pi, sin
 
-import pico2d
-
 import game_framework
 from geometry import box_points, circle_intersects_polygon
 
@@ -26,19 +24,20 @@ class Projectile:
         distance = self.data['projectile_speed_mps'] * game_framework.frame_time
         self.x += cos(self.angle) * distance
         self.y += sin(self.angle) * distance
-        beam = self.player.combat.beam
+        combat = self.player.combat
+        beam = combat.beam
         if beam and beam.active and circle_intersects_polygon(self.x, self.y, self.radius, beam.polygon()):
-            self.active, self.result = False, 'beam'
+            self.result = 'beam'
         elif circle_intersects_polygon(self.x, self.y, self.radius, box_points(self.player.get_bb())):
-            self.result = self.player.combat.receive(
-                self.identifier, self, self.data['damage'], self.data['energy_gain'])
-            self.active = False
+            self.result = combat.receive(self.identifier, self, self.data['damage'], self.data['energy_gain'])
+        elif ((area := combat.parry_area(self))
+              and circle_intersects_polygon(self.x, self.y, self.radius, area)
+              and combat.try_parry(self.identifier, self, self.data['energy_gain'])):
+            self.result = 'parry'
         elif hypot(self.x, self.y) >= self.player.arena.radius:
-            self.active, self.result = False, 'boundary'
+            self.result = 'boundary'
+        self.active = self.result is None
 
     def draw(self):
-        if self.active:
-            camera = self.player.camera
-            x, y = camera.to_screen(self.x, self.y)
-            pico2d.draw_circle(x, y, max(1, round(self.radius * camera.pixels_per_meter)),
-                              255, 204, 112, filled=True)
+        if self.active and self.player.sprites:
+            self.player.sprites.draw_projectile(self, self.player.camera)

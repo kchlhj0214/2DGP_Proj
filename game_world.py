@@ -15,16 +15,25 @@ def remove_object(obj):
     raise ValueError('월드에 없는 객체입니다.')
 
 
-def update():
+def update(stop=None):
     for layer in world:
         for obj in layer[:]:
+            if stop is not None and stop():
+                return
             obj.update()
 
 
-def render():
-    for layer in world:
-        for obj in layer[:]:
-            obj.draw()
+def render(before_actors=None):
+    for obj in world[0][:]:
+        obj.draw()
+    if before_actors is not None:
+        before_actors()
+    # World y grows north. Draw the actors behind others first, using the foot anchor.
+    for obj in sorted(world[1], key=lambda item: getattr(item, 'y', 0.0)
+                      - getattr(item, 'height', 0.0) / 2, reverse=True):
+        obj.draw()
+    for obj in world[2][:]:
+        obj.draw()
 
 
 def clear():

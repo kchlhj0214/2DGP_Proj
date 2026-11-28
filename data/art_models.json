@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "status": "awaiting_model_review",
+  "palette": [
+    {"id": "skin", "hex": "B88158", "roughness": 0.7, "metallic": 0.0},
+    {"id": "skin_light", "hex": "C9946A", "roughness": 0.7, "metallic": 0.0},
+    {"id": "skin_dark", "hex": "9A6444", "roughness": 0.8, "metallic": 0.0},
+    {"id": "hair", "hex": "36251E", "roughness": 0.85, "metallic": 0.0},
+    {"id": "hair_light", "hex": "4E3528", "roughness": 0.85, "metallic": 0.0},
+    {"id": "leather", "hex": "513426", "roughness": 0.8, "metallic": 0.0},
+    {"id": "leather_light", "hex": "795139", "roughness": 0.75, "metallic": 0.0},
+    {"id": "fur", "hex": "B7A083", "roughness": 1.0, "metallic": 0.0},
+    {"id": "fur_light", "hex": "D1BCA0", "roughness": 1.0, "metallic": 0.0},
+    {"id": "bronze", "hex": "A97939", "roughness": 0.48, "metallic": 0.6},
+    {"id": "bronze_dark", "hex": "63442A", "roughness": 0.6, "metallic": 0.5},
+    {"id": "iron", "hex": "34353C", "roughness": 0.7, "metallic": 0.35},
+    {"id": "steel", "hex": "A3A7AA", "roughness": 0.4, "metallic": 0.7},
+    {"id": "gem", "hex": "36C5CD", "roughness": 0.25, "metallic": 0.2},
+    {"id": "bone", "hex": "D4C3A0", "roughness": 0.8, "metallic": 0.0},
+    {"id": "bone_shadow", "hex": "98836A", "roughness": 0.85, "metallic": 0.0},
+    {"id": "cloth", "hex": "663642", "roughness": 0.9, "metallic": 0.0},
+    {"id": "cloth_light", "hex": "884B56", "roughness": 0.9, "metallic": 0.0},
+    {"id": "violet", "hex": "B86EE0", "roughness": 0.4, "metallic": 0.1},
+    {"id": "void", "hex": "1F1B22", "roughness": 1.0, "metallic": 0.0}
+  ],
+  "characters": [
+    {"id": "hero", "height_m": 1.8, "concept": "concepts/barbarian-appearance-v1.png", "equipment_concept": "concepts/barbarian-relic-shield-v1.png", "equipment": "relic_shield", "review_pose": "ready"},
+    {"id": "melee", "height_m": 1.8, "concept": "concepts/skeleton-enemies-v1.png", "equipment_concept": "concepts/enemy-scale-lineup-v1.png", "equipment": "sword", "review_pose": "ready"},
+    {"id": "ranged", "height_m": 1.8, "concept": "concepts/skeleton-enemies-v1.png", "equipment_concept": "concepts/enemy-scale-lineup-v1.png", "equipment": "staff", "review_pose": "ready"}
+  ],
+  "views": [
+    {"id": "front", "azimuth_deg": 0},
+    {"id": "front_right", "azimuth_deg": 45},
+    {"id": "right", "azimuth_deg": 90},
+    {"id": "back_right", "azimuth_deg": 135},
+    {"id": "back", "azimuth_deg": 180},
+    {"id": "back_left", "azimuth_deg": 225},
+    {"id": "left", "azimuth_deg": 270},
+    {"id": "front_left", "azimuth_deg": 315}
+  ],
+  "render": [
+    {"id": "model_review", "resolution_px": 640, "elevation_deg": 12, "orthographic_scale_m": 2.55, "samples": 24},
+    {"id": "game_angle_review", "resolution_px": 160, "elevation_deg": 40, "orthographic_scale_m": 2.65, "samples": 24}
+  ],
+  "background": [
+    {"id": "colosseum", "medium": "2d_pixel_art", "playable_diameter_m": 63, "gates": "north,south,west,east", "source": "new_art_matching_existing_concepts", "status": "review_only"}
+  ]
+}

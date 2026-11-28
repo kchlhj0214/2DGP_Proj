@@ -1,6 +1,6 @@
 """LEC11의 객체 구조와 LEC16의 시간 기반 이동을 적용한 플레이어."""
 
-from math import atan2, hypot
+from math import atan2, cos, hypot, pi, sin
 
 import pico2d
 
@@ -19,6 +19,11 @@ class Player:
         self.pressed_keys = set()
         self.targets = []
         self.projectiles = []
+        self.sprites = self.effects = None
+        self.moving = False
+        self.knockback = None
+        self.visual_motion, self.visual_time = 'idle', 0.0
+        self.visual_angle = -pi / 2
         self.combat = PlayerCombat(self)
 
     def handle_event(self, event):
@@ -52,6 +57,10 @@ class Player:
         left, bottom, right, _ = self.get_bb()
         return left, bottom, right, bottom + self.boundary_height
 
+    def beam_pose(self):
+        motion = 'guard_walk' if self.visual_motion == 'run' else 'guard'
+        return motion, self.visual_time
+
     def constrain_position(self, x, y):
         """발밑 직사각형을 제한한 뒤 플레이어 중심 좌표로 복원한다."""
         offset_y = (self.height - self.boundary_height) / 2
@@ -59,37 +68,64 @@ class Player:
             x, y - offset_y, self.width, self.boundary_height)
         return ground_x, ground_y + offset_y
 
+    def start_knockback(self, angle, distance, duration):
+        target = self.constrain_position(self.x + cos(angle) * distance, self.y + sin(angle) * distance)
+        self.knockback = (self.x, self.y, *target, duration, 0.0)
+
+    def advance_knockback(self, dt):
+        if self.knockback is None or self.combat.hp <= 0:
+            return 0.0
+        x, y, end_x, end_y, duration, age = self.knockback
+        used = min(dt, duration - age)
+        age += used
+        progress = 1 - (1 - age / duration) ** 2
+        self.x, self.y = x + (end_x - x) * progress, y + (end_y - y) * progress
+        self.knockback = (x, y, end_x, end_y, duration, age) if age < duration else None
+        return used
+
     def update(self):
-        self.combat.advance(game_framework.frame_time)
+        dt = game_framework.frame_time
+        before = (self.x, self.y)
+        sliding = self.advance_knockback(dt)
+        moving_dt = max(0.0, dt - max(sliding, self.combat.position_lock_remaining()))
+        self.combat.advance(dt)
         dx = int(pico2d.SDLK_d in self.pressed_keys) - int(pico2d.SDLK_a in self.pressed_keys)
         dy = int(pico2d.SDLK_w in self.pressed_keys) - int(pico2d.SDLK_s in self.pressed_keys)
         length = hypot(dx, dy)
-        if length and self.combat.state not in ('raising', 'dead'):
+        if length and moving_dt > 1e-9 and self.combat.state != 'dead':
             speed = (self.combat.settings['guard_kmph'] / 3.6
                      if self.combat.state == 'guard' else self.speed_mps)
-            distance = speed * game_framework.frame_time
+            distance = speed * moving_dt
             self.x, self.y = self.constrain_position(
                 self.x + dx / length * distance,
                 self.y + dy / length * distance)
-        self.combat.update_beam(game_framework.frame_time)
+        self.moving = sliding == 0 and hypot(self.x - before[0], self.y - before[1]) > 1e-9
+        state = self.combat.state
+        if state == 'guard' or self.combat.position_lock_remaining() > 1e-9:
+            self.visual_angle = self.combat.aim
+        elif state == 'beam':
+            self.visual_angle = self.combat.beam.angle
+        elif length and state != 'dead':
+            self.visual_angle = atan2(dy, dx)
+        motion = ('guard_walk' if self.moving else 'guard') if state == 'guard' else ('run' if self.moving else 'idle')
+        self.visual_time = self.visual_time + dt if self.visual_motion == motion else 0.0
+        self.visual_motion = motion
+        self.combat.update_beam(dt)
 
     def draw(self):
-        left, bottom, right, top = self.get_bb()
-        x1, y1 = self.camera.to_screen(left, bottom)
-        x2, y2 = self.camera.to_screen(right, top)
-        # 보이는 직사각형과 충돌 히트박스가 정확히 같다.
-        color = (64, 208, 192) if self.combat.hp > 0 else (83, 91, 102)
-        if self.combat.message == 'HIT' and self.combat.time < self.combat.message_until:
-            color = (244, 102, 102)
-        pico2d.draw_rectangle(x1, y1, x2, y2, *color, filled=True)
-        pico2d.draw_rectangle(x1, y1, x2, y2, 206, 255, 239)
-        # 경계 판정에 쓰는 하단 영역을 가로선으로 구분한다.
-        _, _, _, ground_top = self.get_boundary_bb()
-        _, ground_y = self.camera.to_screen(self.x, ground_top)
-        pico2d.draw_line(x1, ground_y, x2, ground_y, 206, 255, 239)
-        # 조준 방향은 도형 몸체의 회전과 독립적으로 표시한다.
-        from math import cos, sin
-        px, py = self.camera.to_screen(self.x, self.y)
-        tx, ty = self.camera.to_screen(self.x + cos(self.combat.aim), self.y + sin(self.combat.aim))
-        pico2d.draw_line(px, py, tx, ty, 255, 255, 255)
         self.combat.draw()
+        if not self.sprites:
+            return
+        flash = self.effects and self.effects.player_flash_color()
+        motion, angle, frame = self.visual_motion, self.visual_angle, None
+        if self.combat.position_lock_remaining() > 1e-9:
+            motion, angle, frame = 'parry', self.combat.aim, self.combat.parry_frame()
+        elif self.combat.state == 'guard':
+            motion = 'guard_walk_front' if self.combat.walking_guard() else 'guard'
+            angle = self.combat.aim
+        elif self.combat.state == 'beam':
+            angle = self.combat.beam.angle
+            motion, _ = self.beam_pose()
+        self.sprites.draw('hero', motion, self, self.camera, angle, self.visual_time, frame, flash)
+        if self.combat.beam:
+            self.combat.beam.draw_emitter()
