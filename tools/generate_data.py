@@ -192,7 +192,8 @@ def validate_waves(data, scale, combat):
     from math import isfinite
     schemas = {
         'settings': {'id', 'time_limit_s', 'arrival_interval_s', 'gate_wait_s', 'gate_lift_s', 'portal_offset_m',
-                     'bridge_inset_m', 'entrance_speed_mps', 'reveal_m', 'enemy_gap_m'},
+                     'bridge_inset_m', 'entrance_speed_mps', 'reveal_m', 'enemy_gap_m',
+                     'enemy_detection_diameter_ratio'},
         'waves': {'id', 'number', 'melee_id', 'ranged_id', 'melee_per_gate', 'ranged_per_gate'},
         'modes': {'id', 'key'},
         'single_modes': {'id', 'enemy_id', 'count'},
@@ -233,6 +234,8 @@ def validate_waves(data, scale, combat):
     entry = data['settings'][0]
     if entry['reveal_m'] >= entry['portal_offset_m']:
         raise ValueError('등장 마스크는 경기장 경계 전에 끝나야 합니다.')
+    if entry['enemy_detection_diameter_ratio'] > 1:
+        raise ValueError('적 감지 반경은 경기장 지름 이하여야 합니다.')
     melee_ids = {row['id'] for row in combat['enemies']}
     ranged_ids = {row['id'] for row in data['ranged']}
     if [row['id'] for row in data['single_modes']] != ['none', 'melee', 'ranged']:

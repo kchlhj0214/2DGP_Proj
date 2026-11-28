@@ -8,7 +8,8 @@ SETTINGS = {'main': {'id': 'main',
           'bridge_inset_m': 5.0,
           'entrance_speed_mps': 6.0,
           'reveal_m': 2.3,
-          'enemy_gap_m': 0.7}}
+          'enemy_gap_m': 0.7,
+          'enemy_detection_diameter_ratio': 0.4}}
 
 WAVES = {'wave1': {'id': 'wave1',
            'number': 1,

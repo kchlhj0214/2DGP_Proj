@@ -1,6 +1,6 @@
 {
   "settings": [
-    {"id": "main", "time_limit_s": 120, "arrival_interval_s": 0.24, "gate_wait_s": 0.45, "gate_lift_s": 0.55, "portal_offset_m": 7.0, "bridge_inset_m": 5.0, "entrance_speed_mps": 6.0, "reveal_m": 2.3, "enemy_gap_m": 0.7}
+    {"id": "main", "time_limit_s": 120, "arrival_interval_s": 0.24, "gate_wait_s": 0.45, "gate_lift_s": 0.55, "portal_offset_m": 7.0, "bridge_inset_m": 5.0, "entrance_speed_mps": 6.0, "reveal_m": 2.3, "enemy_gap_m": 0.7, "enemy_detection_diameter_ratio": 0.4}
   ],
   "waves": [
     {"id": "wave1", "number": 1, "melee_id": "melee", "ranged_id": "ranged", "melee_per_gate": 1, "ranged_per_gate": 1},

@@ -5,11 +5,13 @@ from math import atan2, cos, hypot, pi, radians, sin
 import pico2d
 
 import game_framework
+from enemy_awareness import EnemyAwareness
 from game_data import CHARACTERS, VIEWPORTS
 from geometry import box_points, intersects, oriented_box, draw_sweep_warning, warning_strength
 from enemy_spacing import move_enemy, safe_step
 from presentation_data import VISUALS
 from sprites import clip_duration
+from wave_data import SETTINGS
 
 
 class MeleeEnemy:
@@ -38,6 +40,8 @@ class MeleeEnemy:
         self.visual_time = 0.0
         self.moving = False
         self.death_age = 0.0
+        detection_radius = 2 * player.arena.radius * SETTINGS['main']['enemy_detection_diameter_ratio']
+        self.awareness = EnemyAwareness(detection_radius, player.height)
 
     def get_bb(self):
         return (self.x - self.width / 2, self.y - self.height / 2,
@@ -91,6 +95,14 @@ class MeleeEnemy:
         self.moving = hypot(self.x - pos[0], self.y - pos[1]) > 1e-9
         self.visual_time = self.visual_time + dt if self.moving else 0.0
 
+    def approach(self, dx, dy, distance, dt, stop_distance=0.0):
+        if distance <= stop_distance:
+            self.moving, self.visual_time = False, 0.0
+            return
+        self.angle = atan2(dy, dx)
+        step = min(distance - stop_distance, self.data['speed_kmph'] / 3.6 * dt)
+        self.walk_toward(dx / distance * step, dy / distance * step, dt)
+
     def sword_polygon(self):
         progress = min(1.0, self.age / self.data['swing_s'])
         spread = radians(self.data['sweep_deg'])
@@ -124,19 +136,21 @@ class MeleeEnemy:
         if self.player.combat.hp <= 0:
             return
         dt = game_framework.frame_time
+        visible = self.awareness.observe(self)
         recoiling = self.advance_recoil(dt)
         if recoiling and self.state != 'stunned':
             return
         if self.state == 'chase':
+            if not visible:
+                self.awareness.search(self, dt)
+                return
             dx, dy = self.player.x - self.x, self.player.y - self.y
             distance = hypot(dx, dy)
             if distance > 0:
                 self.angle = atan2(dy, dx)
             attack_distance = self.attack_distance(self.angle)
             if distance > attack_distance + 1e-9:
-                step = min(distance - attack_distance, self.data['speed_kmph'] / 3.6 * dt)
-                # 적의 발밑도 플레이어와 같은 원 경계를 사용한다.
-                self.walk_toward(dx / distance * step, dy / distance * step, dt)
+                self.approach(dx, dy, distance, dt, attack_distance)
             else:
                 self.state, self.age = 'windup', 0.0
                 self.moving, self.visual_time = False, 0.0

@@ -128,10 +128,11 @@ class OrcBoss(MeleeEnemy):
             player.combat.receive(self.attack_id, self, SLAM['damage'], 0, facing=False)
         rng = Random(self.attack_count)
         edge = player.arena.radius - ROCK['radius_m']
-        # At least one drop threatens the player's current area; other drops cover the arena.
-        radius = hypot(player.x, player.y)
+        # Aim the first drop at the last spotted position and scatter the others.
+        x, y = self.awareness.last_seen or (self.x, self.y)
+        radius = hypot(x, y)
         factor = min(1.0, edge / max(radius, 0.01))
-        self.rocks = [FallingRock(player.x * factor, player.y * factor, ROCK['flight_s'])]
+        self.rocks = [FallingRock(x * factor, y * factor, ROCK['flight_s'])]
         for _ in range(ROCK['count'] * 20):
             if len(self.rocks) == ROCK['count']:
                 break
@@ -179,8 +180,12 @@ class OrcBoss(MeleeEnemy):
             return
         if self.player.combat.hp <= 0:
             return
+        visible = self.awareness.observe(self)
         self.age += dt
         if self.state == 'idle':
+            if not visible:
+                self.awareness.search(self, dt)
+                return
             dx, dy = self.player.x - self.x, self.player.y - self.y
             distance = hypot(dx, dy)
             if distance > 1e-9:
@@ -194,8 +199,7 @@ class OrcBoss(MeleeEnemy):
                     self.next_pattern = (self.next_pattern + 1) % len(PATTERNS)
                     self.begin('charge')
                 elif distance:
-                    stride = BOSS['speed_kmph'] / 3.6 * dt
-                    self.walk_toward(dx / distance * stride, dy / distance * stride, dt)
+                    self.approach(dx, dy, distance, dt)
         elif self.state == 'windup' and self.age >= ATTACKS[self.pattern]['windup_s']:
             self.state, self.age = self.pattern, 0.0
             if self.pattern == 'slam':

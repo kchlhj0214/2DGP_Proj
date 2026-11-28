@@ -33,9 +33,14 @@ class RangedEnemy(MeleeEnemy):
         if self.player.combat.hp <= 0:
             return
         dt = game_framework.frame_time
+        visible = self.awareness.observe(self)
         self.cooldown = max(0.0, self.cooldown - dt)
         self.cast_age += dt
         if self.advance_recoil(dt):
+            return
+        if not visible:
+            self.state = 'chase'
+            self.awareness.search(self, dt)
             return
         dx, dy = self.player.x - self.x, self.player.y - self.y
         distance = hypot(dx, dy)
@@ -43,8 +48,7 @@ class RangedEnemy(MeleeEnemy):
             self.angle = atan2(dy, dx)
         if distance > self.data['range_m'] + 1e-9:
             self.state = 'chase'
-            step = min(distance - self.data['range_m'], self.data['speed_kmph'] / 3.6 * dt)
-            self.walk_toward(dx / distance * step, dy / distance * step, dt)
+            self.approach(dx, dy, distance, dt, self.data['range_m'])
             return
         self.state = 'shoot'
         self.moving, self.visual_time = False, 0.0
