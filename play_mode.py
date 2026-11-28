@@ -16,6 +16,7 @@ from wave_manager import WaveManager
 from impact_effects import ImpactEffects
 from sprites import SpriteLibrary
 from patch_autopilot import PatchRound
+from pause_menu import PauseMenu
 from presentation_data import VISUALS
 
 player = arena = camera = None
@@ -25,6 +26,7 @@ enemies = []
 projectiles = []
 waves = None
 test_path = autopilot = None
+pause_menu = None
 
 
 def init():
@@ -53,29 +55,51 @@ def init():
 
 
 def handle_events():
-    global focused, paused
+    global focused, paused, pause_menu
     events = pico2d.get_events()
+    if any(event.type == pico2d.SDL_QUIT for event in events):
+        game_framework.quit()
+        return
     if autopilot is not None:
-        if any(event.type == pico2d.SDL_QUIT for event in events):
-            game_framework.quit()
         return
     # pico2d.get_events는 WINDOWEVENT를 반환하지 않으므로 포커스를 조회한다.
     has_focus = bool(pico2d.SDL_GetKeyboardFocus())
     if focused and not has_focus:
         pause()
+        if pause_menu:
+            pause_menu.input.dragging = False
     focused = has_focus
+    if not focused:
+        return
     for event in events:
-        if event.type == pico2d.SDL_QUIT:
-            game_framework.quit()
-        elif event.type == pico2d.SDL_KEYDOWN and event.key == pico2d.SDLK_ESCAPE:
-            paused = not paused
+        is_key = event.type == pico2d.SDL_KEYDOWN
+        if not paused and is_key and event.key == pico2d.SDLK_ESCAPE:
+            if pause_menu is None:
+                pause_menu = PauseMenu()
+            pause_menu.open()
+            paused = True
             pause()
-        elif event.type == pico2d.SDL_KEYDOWN and event.key == pico2d.SDLK_r and focused:
-            init()
             break
-        elif event.type == pico2d.SDL_KEYDOWN and focused and waves.handle_key(event.key):
-            break
-        elif focused and not paused and not waves.won:
+        if is_key and (not paused or not pause_menu.confirm):
+            if event.key == pico2d.SDLK_r:
+                init()
+                break
+            if waves.handle_key(event.key):
+                break
+        if paused:
+            action = pause_menu.handle(event)
+            if action == 'continue':
+                paused = False
+                resume()
+                break
+            if action == 'restart':
+                init()
+                break
+            if action == 'menu':
+                from main_menu import MAIN_MENU
+                game_framework.change_mode(MAIN_MENU)
+                break
+        elif not waves.won:
             player.handle_event(event)
 
 
@@ -128,6 +152,8 @@ def render():
                           15, 21, 29, filled=True)
     game_world.render(draw_ground_effects)
     player.effects.draw()
+    if paused and pause_menu:
+        pause_menu.draw()
     pico2d.update_canvas()
 
 
@@ -150,8 +176,11 @@ def resume():
 
 
 def finish():
-    global player, arena, camera, enemies, projectiles, waves, autopilot
+    global player, arena, camera, enemies, projectiles, waves, autopilot, pause_menu, paused
     game_world.clear()
+    if pause_menu:
+        pause_menu.ui.close()
+        pause_menu = None
     if player is not None:
         player.sprites = player.effects = None
         arena.art = ()
@@ -160,3 +189,4 @@ def finish():
     projectiles = []
     waves = None
     autopilot = None
+    paused = False

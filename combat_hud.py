@@ -60,8 +60,8 @@ class CombatHUD:
         if combat.time < combat.message_until:
             self.font.draw(x - 35, y + 58, combat.message, (248, 228, 142))
         if mode.paused:
-            self.font.draw(x - 100, y + 96, '일시정지 · ESC로 계속', (245, 236, 201))
-        elif combat.hp <= 0:
+            return
+        if combat.hp <= 0:
             self.font.draw(x - 98, y + 96, '쓰러졌습니다 · R로 재시작', (255, 172, 163))
         elif mode.waves.won:
             self.font.draw(x - 103, y + 96, '보스 처치 · R로 재시작', (224, 246, 157))
