@@ -3,17 +3,19 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
+from math import cos, radians, sin
 from pathlib import Path
 from urllib.request import Request, urlopen
 
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageOps
 
 from tools.build_pixellab_motion import close_joint_seam, pixel_regions
-from tools.pixellab_boss_scene import DIRECTIONS, RIG, ROOT, pose, view_joints
+from tools.pixellab_boss_scene import DIRECTIONS, OFFSET, RIG, ROOT, pose, view_joints
 
 SOURCE = ROOT / 'art/boss/pixellab'
 SLAM_PLATES = ROOT / 'art/boss/animations/slam'
+LINING = ROOT / 'art/boss/lining.png'
 ASSETS = ROOT / 'assets/pixellab-sprites'
 MANIFEST = ROOT / 'art/boss/workbench.json'
 CELL, ORIGIN = 320, (160, 244)
@@ -78,6 +80,42 @@ def normalize(frame, offset, source_foot, cell, origin):
     return out
 
 
+def load_lining():
+    # PixelLab sheet panels cover source x=64..191 for each original direction.
+    layers = {}
+    with Image.open(LINING) as sheet:
+        for column, direction in enumerate(('south', 'south-east', 'east')):
+            layer = Image.new('RGBA', (256, 256))
+            layer.paste(sheet.crop((128 * column, 0, 128 * (column + 1), 256)), (64, 0))
+            layers[direction] = layer
+    return layers
+
+
+def add_lining(frame, layer, view, direction, row, foot, origin):
+    """Move the hand-painted concealed surfaces with the cape or torso."""
+    joints = view_joints(view)
+    node, pivot = ('torso', joints[0]) if view['id'] == 'east' else ('cape', joints[-1])
+    motion = dict(zip(RIG['columns'], row, strict=True))
+    placement = pose(view, motion, joints)[node]
+    shift = complex(*placement['at']) - complex(*OFFSET)
+    angle = radians(placement['angle'])
+    c, s = cos(angle), sin(angle)
+    mirror = 1 if direction == view['id'] else -1
+    center_x = 128 if mirror == 1 else 127
+    anchor = complex(center_x - mirror * origin[0] / SCALE, foot - origin[1] / SCALE)
+    start = (anchor - pivot - shift) * complex(c, -s) + pivot
+    layer = layer.transform(frame.size, Image.Transform.AFFINE,
+                            (mirror * c / SCALE, s / SCALE, start.real,
+                             -mirror * s / SCALE, c / SCALE, start.imag),
+                            Image.Resampling.NEAREST)
+    bounds = frame.getbbox()
+    backing = Image.new('RGBA', frame.size)
+    backing.paste(layer.crop(bounds), bounds[:2])
+    transparent = frame.getchannel('A').point(lambda opacity: 0 if opacity else 255)
+    frame.paste(backing, mask=ImageChops.multiply(backing.getchannel('A'), transparent))
+    return frame
+
+
 def slam_plate(direction, index):
     # Preserve the original two-handed PixelLab strike plates where available.
     view = {'south': 'S', 'east': 'E', 'west': 'E'}.get(direction)
@@ -102,6 +140,7 @@ def build(exports, destination, fetch):
                       if clip['actor'] != 'boss' or clip['action'] == 'idle']
     feet = {}
     views = {view['id']: view for view in RIG['views']}
+    lining = load_lining()
     for direction in DIRECTIONS:
         reference = RIG['mirrors'].get(direction, direction)
         with Image.open(SOURCE / f'{reference}.png') as sprite:
@@ -127,14 +166,18 @@ def build(exports, destination, fetch):
             for index in range(count):
                 x, y = index % COLUMNS * source_cell, index // COLUMNS * source_cell
                 source_frame = slam_plate(direction, index) if action == 'slam' else None
-                source_offset = (0, 0) if source_frame is not None else offset
-                if source_frame is None:
+                from_workbench = source_frame is None
+                source_offset = offset if from_workbench else (0, 0)
+                if from_workbench:
                     source_frame = image.crop((x, y, x + source_cell, y + source_cell))
                     repair_joints(source_frame, views[reference], rows[index], direction != reference)
                 try:
                     frame = normalize(source_frame, source_offset, feet[direction], cell, origin)
                 except ValueError as error:
                     raise ValueError(f'{action}/{direction}/{index + 1}: {error}') from error
+                if from_workbench and reference in lining:
+                    frame = add_lining(frame, lining[reference], views[reference], direction,
+                                       rows[index], feet[direction], origin)
                 sheet.paste(frame, (index * cell, row * cell))
         name = f'boss-{action}'
         sheet.save(destination / f'{name}.png', optimize=True)
