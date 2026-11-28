@@ -9,6 +9,16 @@ from tools.generate_data import ROOT
 RIG = json.loads((ROOT / 'data/boss_rig.json').read_text(encoding='utf-8'))
 DIRECTIONS = ('south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west')
 OFFSET = (64, 36)
+SUBFRAMES = 2
+ATTACK_PHASES = {'charge': (4, 8), 'slam': (4, 4, 4), 'swing': (4, 4, 4)}
+
+
+def expanded_rows(action):
+    """Insert new articulated poses, including the seams of the looping strides."""
+    rows = RIG['clips'][action]
+    end = rows[0] if action == 'walk' else rows[4] if action == 'charge' else rows[-1]
+    return [pose_row for first, second in zip(rows, [*rows[1:], end], strict=True)
+            for pose_row in (first, [(a + b) / 2 for a, b in zip(first, second, strict=True)])]
 
 
 def pair(point):
@@ -97,7 +107,7 @@ def pose(view, motion, joints):
     return result
 
 
-def rig_view(view, rows):
+def rig_view(view, rows, action):
     name = view['id']
     joints = view_joints(view)
     pelvis, shoulder, elbow, free_shoulder, cape_pin = joints
@@ -127,6 +137,9 @@ def rig_view(view, rows):
         exclusions.append(view['other_arm'])
         nodes['free_arm'] = plate('free_arm', free_shoulder)
     parts['cape'] = {'include': [cape], 'exclude': exclusions.copy()}
+    if action == 'stagger' and name in ('north-east', 'north'):
+        # The cape covers the upper legs from behind. Keep those cloth folds on the cape.
+        parts['cape']['exclude'] = [arm]
     # Preserve a strip inside the cape seam to keep it attached through the swing.
     cape_tail = [[0, 115], [256, 115], [256, 256], [0, 256]]
     parts['torso'] = {'exclude': [*exclusions, cape],
@@ -147,7 +160,7 @@ def rig_view(view, rows):
 
 
 def recipe(action, selected=None):
-    rows = RIG['clips'][action]
+    rows = expanded_rows(action)
     originals = [view for view in RIG['views'] if selected is None or view['id'] in selected]
     active = {view['id'] for view in originals}
     views = [{'id': view['id'], 'offset': list(OFFSET)} for view in originals]
@@ -158,7 +171,7 @@ def recipe(action, selected=None):
                 'views': views, 'source_bookends_exact': False,
                 'durations_ms': [100] * len(rows), 'require_clear_border': True},
         'scene': {'layers': [{'id': 'art', 'name': 'Body'}],
-                  'views': {view['id']: rig_view(view, rows) for view in originals}},
+                  'views': {view['id']: rig_view(view, rows, action) for view in originals}},
     }
     sources = {view['id']: f'character:{RIG["character"]}:{view["id"]}' for view in originals}
     return {'recipe': data, 'sources': sources}

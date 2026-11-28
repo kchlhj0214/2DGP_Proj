@@ -3,7 +3,7 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
-from math import cos, radians, sin
+from math import ceil, cos, radians, sin, sqrt
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -11,15 +11,19 @@ import numpy as np
 from PIL import Image, ImageChops, ImageOps
 
 from tools.build_pixellab_motion import close_joint_seam, pixel_regions
-from tools.pixellab_boss_scene import DIRECTIONS, OFFSET, RIG, ROOT, pose, view_joints
+from sprite_layout import cell_slot, sheet_size
+from tools.pixellab_boss_scene import (ATTACK_PHASES, DIRECTIONS, OFFSET, RIG, ROOT,
+                                       SUBFRAMES, expanded_rows, pose, view_joints)
 
 SOURCE = ROOT / 'art/boss/pixellab'
 SLAM_PLATES = ROOT / 'art/boss/animations/slam'
 LINING = ROOT / 'art/boss/lining.png'
+STAGGER_LINING = ROOT / 'art/boss/stagger-lining.png'
 ASSETS = ROOT / 'assets/pixellab-sprites'
 MANIFEST = ROOT / 'art/boss/workbench.json'
 CELL, ORIGIN = 320, (160, 244)
 SCALE, COLUMNS = .86, 4
+MAX_SHEET_SIDE = 4096
 
 
 def fetch_sheet(export, direction, path):
@@ -80,21 +84,23 @@ def normalize(frame, offset, source_foot, cell, origin):
     return out
 
 
-def load_lining():
-    # PixelLab sheet panels cover source x=64..191 for each original direction.
+def load_lining(path, directions, panel_width):
+    # PixelLab sheet panels start at source x=64 for each original direction.
     layers = {}
-    with Image.open(LINING) as sheet:
-        for column, direction in enumerate(('south', 'south-east', 'east')):
+    with Image.open(path) as sheet:
+        if sheet.width != panel_width * len(directions) or sheet.height > 256:
+            raise ValueError(f'보스 안감 시트 크기가 잘못되었습니다: {path}')
+        for column, direction in enumerate(directions):
             layer = Image.new('RGBA', (256, 256))
-            layer.paste(sheet.crop((128 * column, 0, 128 * (column + 1), 256)), (64, 0))
+            layer.paste(sheet.crop((panel_width * column, 0, panel_width * (column + 1), sheet.height)), (64, 0))
             layers[direction] = layer
     return layers
 
 
-def add_lining(frame, layer, view, direction, row, foot, origin):
+def add_lining(frame, layer, view, direction, row, foot, origin, node):
     """Move the hand-painted concealed surfaces with the cape or torso."""
     joints = view_joints(view)
-    node, pivot = ('torso', joints[0]) if view['id'] == 'east' else ('cape', joints[-1])
+    pivot = joints[0] if node == 'torso' else joints[-1]
     motion = dict(zip(RIG['columns'], row, strict=True))
     placement = pose(view, motion, joints)[node]
     shift = complex(*placement['at']) - complex(*OFFSET)
@@ -121,13 +127,57 @@ def slam_plate(direction, index):
     view = {'south': 'S', 'east': 'E', 'west': 'E'}.get(direction)
     if view is None or index >= 8:
         return None
-    if direction == 'south' and index >= 4:
-        index = 7
     with Image.open(SLAM_PLATES / view / f'{index}.png') as sprite:
         frame = sprite.convert('RGBA')
     if direction == 'west':
         frame = ImageOps.mirror(frame)
     return frame
+
+
+def idle_steps(action, count):
+    steps = [0] if action in ATTACK_PHASES else []
+    if action in ('stagger', 'recover', 'swing', 'slam'):
+        steps.extend(range(count - SUBFRAMES, count))
+    return steps
+
+
+def pack_frames(action, frames, origin, atlas_fps):
+    bounds = [frame.getbbox() for frame in frames]
+    x0 = min(origin[0], *(box[0] for box in bounds)) - 1
+    y0 = min(origin[1], *(box[1] for box in bounds)) - 1
+    x1 = max(origin[0] + 1, *(box[2] for box in bounds)) + 1
+    y1 = max(origin[1] + 1, *(box[3] for box in bounds)) + 1
+    width, height = x1 - x0, y1 - y0
+    count = len(frames) // len(DIRECTIONS)
+    columns = min(ceil(sqrt(len(frames) * height / width)), MAX_SHEET_SIDE // width)
+    clip = {'actor': 'boss', 'action': action, 'frames': count, 'loop': action in ('idle', 'walk'),
+            'file': f'boss-{action}.png', 'cell_px': width, 'cell_height_px': height,
+            'columns': columns, 'origin_px': [origin[0] - x0, origin[1] - y0]}
+    if action in ATTACK_PHASES:
+        clip['phases'] = [count * SUBFRAMES for count in ATTACK_PHASES[action]]
+    if rest := idle_steps(action, count):
+        clip['idle_frames'] = rest
+    fps = {'walk': 10, 'charge': 18, 'slam': 16, 'collapse': atlas_fps}.get(action)
+    if fps:
+        clip['fps'] = fps * SUBFRAMES
+    dimensions = sheet_size(clip, width, len(DIRECTIONS))
+    if max(dimensions) > MAX_SHEET_SIDE:
+        raise ValueError(f'보스 스프라이트 시트가 너무 큽니다: {action}')
+    sheet = Image.new('RGBA', dimensions)
+    for index, frame in enumerate(frames):
+        facing, step = divmod(index, count)
+        row, column = cell_slot(clip, facing, step)
+        sheet.paste(frame.crop((x0, y0, x1, y1)), (column * width, row * height))
+    return clip, sheet
+
+
+def save_clip(destination, action, frames, origin, fps):
+    clip, sheet = pack_frames(action, frames, origin, fps)
+    sheet.save(destination / clip['file'], optimize=True)
+    flash = Image.new('RGBA', sheet.size, 'white')
+    flash.putalpha(sheet.getchannel('A'))
+    flash.save(destination / f'boss-{action}-flash.png', optimize=True)
+    return clip
 
 
 def build(exports, destination, fetch):
@@ -136,11 +186,11 @@ def build(exports, destination, fetch):
         raise ValueError('A boss clip is missing a PixelLab export')
     atlas_path = destination / 'atlas.json'
     atlas = json.loads(atlas_path.read_text(encoding='utf-8'))
-    atlas['clips'] = [clip for clip in atlas['clips']
-                      if clip['actor'] != 'boss' or clip['action'] == 'idle']
+    atlas['clips'] = [clip for clip in atlas['clips'] if clip['actor'] != 'boss']
     feet = {}
     views = {view['id']: view for view in RIG['views']}
-    lining = load_lining()
+    lining = load_lining(LINING, ('south', 'south-east', 'east'), 128)
+    stagger_lining = load_lining(STAGGER_LINING, ('south-east', 'east', 'north-east', 'north'), 112)
     for direction in DIRECTIONS:
         reference = RIG['mirrors'].get(direction, direction)
         with Image.open(SOURCE / f'{reference}.png') as sprite:
@@ -151,13 +201,18 @@ def build(exports, destination, fetch):
                          for info in metadata.values() for direction in DIRECTIONS]
             for download in downloads:
                 download.result()
-    for action, rows in RIG['clips'].items():
+    clips = {}
+    rest = {}
+    # The repaired final stagger pose supplies one neutral stance for every transition.
+    for action in ('stagger', *(name for name in RIG['clips'] if name != 'stagger')):
+        rows = expanded_rows(action)
         export = metadata[action]
         source_cell, offset = export['cell_px'], export['offset']
         count = len(rows)
+        neutral = idle_steps(action, count)
         cell, origin = (352, (176, 244)) if action == 'collapse' else (CELL, ORIGIN)
-        sheet = Image.new('RGBA', (cell * count, cell * len(DIRECTIONS)))
-        for row, direction in enumerate(DIRECTIONS):
+        frames = []
+        for direction in DIRECTIONS:
             reference = RIG['mirrors'].get(direction, direction)
             with Image.open(export_path(exports, export, direction)) as source:
                 image = source.convert('RGBA')
@@ -165,7 +220,7 @@ def build(exports, destination, fetch):
                 raise ValueError(f'PixelLab sheet does not match {action}/{direction}')
             for index in range(count):
                 x, y = index % COLUMNS * source_cell, index // COLUMNS * source_cell
-                source_frame = slam_plate(direction, index) if action == 'slam' else None
+                source_frame = slam_plate(direction, index // SUBFRAMES) if action == 'slam' else None
                 from_workbench = source_frame is None
                 source_offset = offset if from_workbench else (0, 0)
                 if from_workbench:
@@ -176,16 +231,20 @@ def build(exports, destination, fetch):
                 except ValueError as error:
                     raise ValueError(f'{action}/{direction}/{index + 1}: {error}') from error
                 if from_workbench and reference in lining:
-                    frame = add_lining(frame, lining[reference], views[reference], direction,
-                                       rows[index], feet[direction], origin)
-                sheet.paste(frame, (index * cell, row * cell))
-        name = f'boss-{action}'
-        sheet.save(destination / f'{name}.png', optimize=True)
-        flash = Image.new('RGBA', sheet.size, 'white')
-        flash.putalpha(sheet.getchannel('A'))
-        flash.save(destination / f'{name}-flash.png', optimize=True)
-        atlas['clips'].append({'actor': 'boss', 'action': action, 'frames': count, 'loop': action == 'walk',
-                               'file': f'{name}.png', 'cell_px': cell, 'origin_px': list(origin)})
+                    node = 'torso' if reference == 'east' else 'cape'
+                    add_lining(frame, lining[reference], views[reference], direction,
+                               rows[index], feet[direction], origin, node)
+                if action == 'stagger' and reference in stagger_lining:
+                    add_lining(frame, stagger_lining[reference], views[reference], direction,
+                               rows[index], feet[direction], origin, 'cape')
+                if action == 'stagger' and index == count - 1:
+                    rest[direction] = frame
+                elif action != 'stagger' and index in neutral:
+                    frame = rest[direction]
+                frames.append(frame)
+        clips[action] = save_clip(destination, action, frames, origin, atlas['fps'])
+    atlas['clips'].append(save_clip(destination, 'idle', list(rest.values()), ORIGIN, atlas['fps']))
+    atlas['clips'].extend(clips[action] for action in RIG['clips'])
     atlas_path.write_text(json.dumps(atlas, indent=2) + '\n', encoding='utf-8')
 
 

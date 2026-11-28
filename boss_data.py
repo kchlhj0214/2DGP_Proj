@@ -16,6 +16,7 @@ CHARGES = {'main': {'id': 'main',
           'guard_push_m': 6.0,
           'windup_s': 1.05,
           'recovery_s': 3.0,
+          'recovery_motion_s': 1.0,
           'speed_mps': 18.0,
           'length_m': 19.0,
           'width_m': 5.2}}

@@ -1,13 +1,23 @@
 {
-  "walk": {"drawing": "1adc326e-a065-4492-92d2-9a93ff58481e", "cell_px": 384, "offset": [64, 36]},
-  "charge": {"drawing": "6c347b23-9d9b-4ad3-9cb4-c93db3150605", "cell_px": 384, "offset": [64, 36],
-    "directions": {
-      "east": "4fe28593-dcf2-4dac-bb19-972aaec81ef3", "south-east": "4fe28593-dcf2-4dac-bb19-972aaec81ef3",
-      "west": "4fe28593-dcf2-4dac-bb19-972aaec81ef3", "south-west": "4fe28593-dcf2-4dac-bb19-972aaec81ef3"
-    }},
-  "slam": {"drawing": "eed6da51-089e-44e9-b0ce-1ccf978e3208", "cell_px": 384, "offset": [64, 36]},
-  "swing": {"drawing": "304b8697-1566-4dcb-830b-3621249c06f0", "cell_px": 384, "offset": [64, 36]},
-  "stagger": {"drawing": "23b6440b-9399-452a-a906-c17a82604b1b", "cell_px": 384, "offset": [64, 36]},
-  "recover": {"drawing": "1e0cad90-7339-462a-a9f7-0c0a15dd4b23", "cell_px": 384, "offset": [64, 36]},
-  "collapse": {"drawing": "53d0a2ec-5aac-45f8-81ec-35b08d64930e", "cell_px": 384, "offset": [64, 36]}
+  "walk": {"drawing": "1d2e41c2-f726-4870-9ac0-05320acb4391", "cell_px": 384, "offset": [64, 36],
+    "directions": {"east": "6fd8e12a-96fd-4fa8-8aa3-1b5e6e118dda", "north-east": "6fd8e12a-96fd-4fa8-8aa3-1b5e6e118dda",
+                   "west": "6fd8e12a-96fd-4fa8-8aa3-1b5e6e118dda", "north-west": "6fd8e12a-96fd-4fa8-8aa3-1b5e6e118dda"}},
+  "charge": {"drawing": "f45f2108-8956-4fdd-af82-9f5210d43d30", "cell_px": 384, "offset": [64, 36],
+    "directions": {"east": "163a83fe-b3e0-45be-a05e-9a3d33b989bc", "north-east": "163a83fe-b3e0-45be-a05e-9a3d33b989bc",
+                   "west": "163a83fe-b3e0-45be-a05e-9a3d33b989bc", "north-west": "163a83fe-b3e0-45be-a05e-9a3d33b989bc"}},
+  "slam": {"drawing": "13a60dd4-009b-43cf-b94a-cbf1e21964da", "cell_px": 384, "offset": [64, 36],
+    "directions": {"east": "983fd49c-7b02-41cc-ac1f-01159c09ce23", "north-east": "983fd49c-7b02-41cc-ac1f-01159c09ce23",
+                   "west": "983fd49c-7b02-41cc-ac1f-01159c09ce23", "north-west": "983fd49c-7b02-41cc-ac1f-01159c09ce23"}},
+  "swing": {"drawing": "bfd85c09-fae2-4820-b207-f185308370f5", "cell_px": 384, "offset": [64, 36],
+    "directions": {"east": "26c890b6-efa9-47ee-a3d1-036ffd5d1645", "north-east": "26c890b6-efa9-47ee-a3d1-036ffd5d1645",
+                   "west": "26c890b6-efa9-47ee-a3d1-036ffd5d1645", "north-west": "26c890b6-efa9-47ee-a3d1-036ffd5d1645"}},
+  "stagger": {"drawing": "bd2d7a67-1a9c-486e-82a8-fe785ce8a494", "cell_px": 384, "offset": [64, 36],
+    "directions": {"east": "180b46d8-a7b7-42b4-913f-1a1f1ce46b43", "north-east": "180b46d8-a7b7-42b4-913f-1a1f1ce46b43",
+                   "west": "180b46d8-a7b7-42b4-913f-1a1f1ce46b43", "north-west": "180b46d8-a7b7-42b4-913f-1a1f1ce46b43"}},
+  "recover": {"drawing": "fbfa9df0-6f8f-4c1e-8b32-3f4ada44cab9", "cell_px": 384, "offset": [64, 36],
+    "directions": {"east": "e578f700-3475-47f7-9c40-a78f6458d6ad", "north-east": "e578f700-3475-47f7-9c40-a78f6458d6ad",
+                   "west": "e578f700-3475-47f7-9c40-a78f6458d6ad", "north-west": "e578f700-3475-47f7-9c40-a78f6458d6ad"}},
+  "collapse": {"drawing": "254afaf0-dc2a-4097-8f4e-30b45f3d1ee6", "cell_px": 384, "offset": [64, 36],
+    "directions": {"east": "9b03a240-6892-4bfa-8eaf-93a3ee8d1497", "north-east": "9b03a240-6892-4bfa-8eaf-93a3ee8d1497",
+                   "west": "9b03a240-6892-4bfa-8eaf-93a3ee8d1497", "north-west": "9b03a240-6892-4bfa-8eaf-93a3ee8d1497"}}
 }

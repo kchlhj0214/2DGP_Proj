@@ -8,6 +8,7 @@ import pico2d
 
 from boss_data import ROCKS
 from presentation_data import VISUALS
+from sprite_layout import cell_size, cell_slot, sheet_size
 
 ROOT = Path(__file__).resolve().parent
 SETTINGS = VISUALS['sprites']
@@ -21,13 +22,14 @@ def direction(angle):
 
 
 def frame_index(clip, elapsed, frame=None):
-    index = int(elapsed * ATLAS['fps']) if frame is None else int(frame)
+    index = int(elapsed * clip.get('fps', ATLAS['fps'])) if frame is None else int(frame)
     count = clip['frames']
     return index % count if clip['loop'] else min(count - 1, max(0, index))
 
 
 def clip_duration(actor, action):
-    return CLIPS[actor, action]['frames'] / ATLAS['fps']
+    clip = CLIPS[actor, action]
+    return clip['frames'] / clip.get('fps', ATLAS['fps'])
 
 
 def shield_emitter(owner, action, angle, elapsed):
@@ -58,8 +60,7 @@ class SpriteLibrary:
         source = (ROOT / SETTINGS['asset_dir'] / f'{actor}-{action}-flash.png'
                   if flash else ATLAS_PATH.parent / clip['file'])
         image = pico2d.load_image(str(source))
-        cell = clip.get('cell_px', self.cell)
-        if (image.w, image.h) != (cell * clip['frames'], cell * 8):
+        if (image.w, image.h) != sheet_size(clip, self.cell, len(ATLAS['directions'])):
             raise ValueError(f'스프라이트 시트 크기가 다릅니다: {actor}/{action}')
         self.clips[actor, action, flash] = image
         return image
@@ -67,37 +68,41 @@ class SpriteLibrary:
     def draw(self, actor, action, owner, camera, angle, elapsed=0.0, frame=None, flash=False,
              reveal=1.0, clip_at_x=None, clip_above_y=None):
         clip = CLIPS[actor, action]
-        cell = clip.get('cell_px', self.cell)
-        anchor = clip.get('origin_px', self.anchor)
         index = frame_index(clip, elapsed, frame)
+        # Reuse the same crop at rest so SDL rounds its screen rectangle the same way.
+        if index in clip.get('idle_frames', ()):
+            action, index = 'idle', 0
+            clip = CLIPS[actor, action]
+        cell_width, cell_height = cell_size(clip, self.cell)
+        anchor = clip.get('origin_px', self.anchor)
         foot_y = owner.y - owner.height / 2
         x, y = camera.to_screen(owner.x, foot_y)
         meters_per_pixel = owner.height / self.body_pixels
         scale = meters_per_pixel * camera.pixels_per_meter
-        half = cell / 2
-        x += (half - anchor[0]) * scale
-        y += (anchor[1] - half) * scale
-        bottom = (7 - direction(angle)) * cell
+        x += (cell_width / 2 - anchor[0]) * scale
+        y += (anchor[1] - cell_height / 2) * scale
         image = self.clips.get((actor, action, bool(flash)))
         if image is None:
             image = self.load_clip(clip, bool(flash))
+        row, column = cell_slot(clip, direction(angle), index)
+        bottom = image.h - (row + 1) * cell_height
         if actor == 'hero' and flash:
             color = (250, 55, 52) if flash == 'red' else (255, 255, 255)
             pico2d.SDL_SetTextureColorMod(image.texture, *color)
-        left, width, height = 0, cell, cell
+        left, width, height = 0, cell_width, cell_height
         if clip_at_x is not None:
             edge, inward = clip_at_x
-            column = anchor[0] + (edge - owner.x) / meters_per_pixel
+            edge_column = anchor[0] + (edge - owner.x) / meters_per_pixel
             if inward > 0:
-                left = max(0, ceil(column))
+                left = max(0, ceil(edge_column))
                 width -= left
             else:
-                width = min(cell, floor(column))
+                width = min(width, floor(edge_column))
             if width <= 0:
                 return
-            x += (left + width / 2 - half) * scale
+            x += (left + width / 2 - cell_width / 2) * scale
         elif clip_above_y is not None:
-            foot_padding = cell - anchor[1]
+            foot_padding = cell_height - anchor[1]
             projected = (clip_above_y - foot_y) * camera.floor_y_ratio
             hidden = max(0, ceil(foot_padding + projected / meters_per_pixel))
             if hidden >= height:
@@ -110,10 +115,10 @@ class SpriteLibrary:
             rows = round(anchor[1] * reveal)
             if rows <= 0:
                 return
-            foot_padding = cell - anchor[1]
+            foot_padding = cell_height - anchor[1]
             height = rows + foot_padding
-            y -= (cell - height) * scale / 2
-        image.clip_draw(index * cell + left, bottom, width, height, x, y, width * scale, height * scale)
+            y -= (cell_height - height) * scale / 2
+        image.clip_draw(column * cell_width + left, bottom, width, height, x, y, width * scale, height * scale)
 
     def draw_projectile(self, projectile, camera):
         x, y = camera.to_screen(projectile.x, projectile.y)

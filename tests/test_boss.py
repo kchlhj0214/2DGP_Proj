@@ -4,13 +4,14 @@ from math import pi
 from unittest import TestCase
 
 from test_combat import advance
-from test_scale import scene
+from test_scale import read_canvas, scene
 from test_waves import controller, elapse
 from orc_boss import BOSS, CHARGE, ROCK, SLAM, SWING, OrcBoss
 from projectile import Projectile
-from sprites import CLIPS
+from sprites import CLIPS, SpriteLibrary
 from wave_data import RANGED
 import game_world
+import pico2d
 
 
 def encounter(player_x=6, player_y=0):
@@ -37,20 +38,73 @@ class BossTests(TestCase):
     def test_render_plays_the_full_charge_stride_and_attack_follow_through(self):
         _, boss = encounter()
         boss.state = 'charge'
-        for step in range(8):
-            boss.visual_time = (step + .5) / 18
-            self.assertEqual(boss.pose(), ('charge', 4 + step))
-        self.assertEqual(CLIPS['boss', 'charge']['frames'], 12)
+        charge = CLIPS['boss', 'charge']
+        windup, stride = charge['phases']
+        self.assertEqual((windup, stride, charge['frames']), (8, 16, 24))
+        for step in range(stride + 1):
+            boss.visual_time = (step + .5) / charge['fps']
+            self.assertEqual(boss.pose(), ('charge', windup + step % stride))
         for action, active in (('slam', 'rocks'), ('swing', 'swing')):
             with self.subTest(action=action):
                 boss.pattern = action
                 boss.state, boss.age = 'windup', 0
                 self.assertEqual(boss.pose(), (action, 0))
                 boss.state = active
-                self.assertEqual(boss.pose(), (action, 4))
-                boss.recover()
                 self.assertEqual(boss.pose(), (action, 8))
-                self.assertEqual(CLIPS['boss', action]['frames'], 12)
+                boss.recover()
+                self.assertEqual(boss.pose(), (action, 16))
+                self.assertEqual(CLIPS['boss', action]['frames'], 24)
+
+    def test_charge_recovery_animates_one_second_then_waits_in_idle_pose(self):
+        for staggered, action in ((False, 'recover'), (True, 'stagger')):
+            with self.subTest(action=action):
+                player, boss = encounter()
+                boss.begin('charge')
+                boss.staggered = staggered
+                boss.recover()
+                position = boss.x, boss.y
+                self.assertEqual(CLIPS['boss', action]['frames'], 16)
+                self.assertEqual(boss.pose(), (action, 0))
+                advance(player, [boss], .99)
+                self.assertEqual(boss.pose(), (action, 15))
+                advance(player, [boss], .02)
+                self.assertEqual(boss.pose(), ('idle', None))
+                advance(player, [boss], 1.98)
+                self.assertEqual(boss.pose(), ('idle', None))
+                self.assertEqual(boss.state, 'recovery')
+                self.assertEqual(boss.attack_count, 1)
+                self.assertEqual((boss.x, boss.y), position)
+                advance(player, [boss], .02)
+                self.assertEqual(boss.state, 'idle')
+
+    def test_recovery_and_idle_share_the_rendered_rest_pose_in_all_directions(self):
+        width, height = 640, 480
+        pico2d.open_canvas(width, height)
+        try:
+            _, player, camera = scene(width, height)
+            boss = OrcBoss('orc', player)
+            camera.follow(boss)
+            sprites = SpriteLibrary()
+            pico2d.clear_canvas()
+            empty = read_canvas(width, height)
+
+            def frame(action, index, angle):
+                pico2d.clear_canvas()
+                sprites.draw('boss', action, boss, camera, angle, frame=index)
+                return read_canvas(width, height)
+
+            for facing in range(8):
+                angle = (facing - 2) * pi / 4
+                idle = frame('idle', 0, angle)
+                self.assertNotEqual(idle, empty)
+                for action in ('recover', 'stagger'):
+                    with self.subTest(action=action, facing=facing):
+                        initial = frame(action, 0, angle)
+                        self.assertNotIn(initial, (idle, empty))
+                        last = CLIPS['boss', action]['frames'] - 1
+                        self.assertEqual(frame(action, last, angle), idle)
+        finally:
+            pico2d.close_canvas()
 
     def test_charge_can_miss_get_parried_or_chip_a_guard(self):
         for method in ('dodge', 'hit', 'parry', 'guard', 'rear-parry', 'rear-guard'):

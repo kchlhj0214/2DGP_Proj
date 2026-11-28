@@ -74,7 +74,7 @@ def validate_boss(data, scale, waves):
     schemas = {
         'bosses': {'character_id', 'wave_id', 'hp', 'scale', 'speed_kmph', 'arrival_s', 'between_attacks_s', 'push_s'},
         'charges': {'damage', 'energy_ratio', 'guard_damage_ratio', 'guard_push_m', 'windup_s',
-                    'recovery_s', 'speed_mps', 'length_m', 'width_m'},
+                    'recovery_s', 'recovery_motion_s', 'speed_mps', 'length_m', 'width_m'},
         'slams': {'damage', 'windup_s', 'recovery_s', 'radius_m', 'eruption_s', 'spikes'},
         'rocks': {'damage', 'energy_ratio', 'radius_m', 'count', 'flight_s', 'interval_s', 'art'},
         'swings': {'damage', 'energy_ratio', 'guard_push_diameter_ratio', 'windup_s', 'swing_s',
@@ -97,6 +97,9 @@ def validate_boss(data, scale, waves):
         raise ValueError('보스의 캐릭터 크기 참조가 잘못되었습니다.')
     if data['bosses'][0]['wave_id'] not in {row['id'] for row in waves['waves']}:
         raise ValueError('보스의 웨이브 참조가 잘못되었습니다.')
+    charge = data['charges'][0]
+    if charge['recovery_motion_s'] >= charge['recovery_s']:
+        raise ValueError('돌진 회복 동작이 끝난 뒤 대기 시간이 필요합니다.')
     rock = data['rocks'][0]
     slam = data['slams'][0]
     if type(rock['count']) is not int or not isinstance(rock['art'], str) or not (ROOT / rock['art']).is_file():
@@ -158,11 +161,24 @@ def validate_presentation(data):
         if action not in expected.get(actor,set()) or type(clip['frames']) is not int or clip['frames'] < 1:
             raise ValueError(f'잘못된 스프라이트 참조: {actor}/{action}')
         expected[actor].remove(action)
-        cell = clip.get('cell_px', atlas['cell_px'])
+        width = clip.get('cell_px', atlas['cell_px'])
+        height = clip.get('cell_height_px', width)
+        columns = clip.get('columns', clip['frames'])
+        fps = clip.get('fps', atlas['fps'])
         origin = clip.get('origin_px', atlas['origin_px'])
-        if (type(cell) is not int or cell <= 0 or len(origin) != 2
-                or any(type(axis) is not int or not 0 <= axis < cell for axis in origin)):
+        if (any(type(value) is not int or value <= 0 for value in (width, height, columns, fps))
+                or len(origin) != 2 or any(type(axis) is not int or not 0 <= axis < extent
+                                           for axis, extent in zip(origin, (width, height)))):
             raise ValueError(f'잘못된 스프라이트 크기 또는 기준점: {actor}/{action}')
+        if actor == 'boss' and action in ('charge', 'slam', 'swing'):
+            phases = clip.get('phases', [])
+            if (len(phases) != (2 if action == 'charge' else 3)
+                    or any(type(count) is not int or count < 1 for count in phases)
+                    or sum(phases) != clip['frames']):
+                raise ValueError(f'보스 스프라이트의 공격 구간이 잘못되었습니다: {action}')
+        if any(type(index) is not int or not 0 <= index < clip['frames']
+               for index in clip.get('idle_frames', ())):
+            raise ValueError(f'대기 스프라이트 참조가 잘못되었습니다: {actor}/{action}')
         if actor == 'hero' and action in ('guard','guard_walk'):
             anchors = clip.get('shield_px', [])
             if (len(anchors) != 8 or any(len(row) != clip['frames'] for row in anchors)

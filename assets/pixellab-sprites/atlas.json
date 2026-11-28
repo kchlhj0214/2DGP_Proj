@@ -2352,93 +2352,153 @@
     {
       "actor": "boss",
       "action": "idle",
-      "frames": 4,
+      "frames": 1,
       "loop": true,
-      "file": "boss-idle.png"
+      "file": "boss-idle.png",
+      "cell_px": 165,
+      "cell_height_px": 161,
+      "columns": 3,
+      "origin_px": [
+        83,
+        159
+      ]
     },
     {
       "actor": "boss",
       "action": "walk",
-      "frames": 8,
+      "frames": 16,
       "loop": true,
       "file": "boss-walk.png",
-      "cell_px": 320,
+      "cell_px": 228,
+      "cell_height_px": 170,
+      "columns": 10,
       "origin_px": [
-        160,
-        244
-      ]
+        114,
+        161
+      ],
+      "fps": 20
     },
     {
       "actor": "boss",
       "action": "charge",
-      "frames": 12,
+      "frames": 24,
       "loop": false,
       "file": "boss-charge.png",
-      "cell_px": 320,
+      "cell_px": 198,
+      "cell_height_px": 196,
+      "columns": 14,
       "origin_px": [
-        160,
-        244
-      ]
+        99,
+        170
+      ],
+      "phases": [
+        8,
+        16
+      ],
+      "idle_frames": [
+        0
+      ],
+      "fps": 36
     },
     {
       "actor": "boss",
       "action": "slam",
-      "frames": 12,
+      "frames": 24,
       "loop": false,
       "file": "boss-slam.png",
-      "cell_px": 320,
+      "cell_px": 267,
+      "cell_height_px": 238,
+      "columns": 14,
       "origin_px": [
-        160,
-        244
-      ]
+        133,
+        205
+      ],
+      "phases": [
+        8,
+        8,
+        8
+      ],
+      "idle_frames": [
+        0,
+        22,
+        23
+      ],
+      "fps": 32
     },
     {
       "actor": "boss",
       "action": "swing",
-      "frames": 12,
+      "frames": 24,
       "loop": false,
       "file": "boss-swing.png",
-      "cell_px": 320,
+      "cell_px": 273,
+      "cell_height_px": 183,
+      "columns": 12,
       "origin_px": [
-        160,
-        244
+        142,
+        162
+      ],
+      "phases": [
+        8,
+        8,
+        8
+      ],
+      "idle_frames": [
+        0,
+        22,
+        23
       ]
     },
     {
       "actor": "boss",
       "action": "stagger",
-      "frames": 8,
+      "frames": 16,
       "loop": false,
       "file": "boss-stagger.png",
-      "cell_px": 320,
+      "cell_px": 276,
+      "cell_height_px": 186,
+      "columns": 10,
       "origin_px": [
-        160,
-        244
+        143,
+        159
+      ],
+      "idle_frames": [
+        14,
+        15
       ]
     },
     {
       "actor": "boss",
       "action": "recover",
-      "frames": 8,
+      "frames": 16,
       "loop": false,
       "file": "boss-recover.png",
-      "cell_px": 320,
+      "cell_px": 165,
+      "cell_height_px": 186,
+      "columns": 13,
       "origin_px": [
-        160,
-        244
+        83,
+        159
+      ],
+      "idle_frames": [
+        14,
+        15
       ]
     },
     {
       "actor": "boss",
       "action": "collapse",
-      "frames": 8,
+      "frames": 16,
       "loop": false,
       "file": "boss-collapse.png",
-      "cell_px": 352,
+      "cell_px": 263,
+      "cell_height_px": 252,
+      "columns": 12,
       "origin_px": [
-        176,
-        244
-      ]
+        133,
+        159
+      ],
+      "fps": 32
     }
   ]
 }

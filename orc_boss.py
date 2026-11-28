@@ -9,6 +9,7 @@ from boss_data import BOSSES, CHARGES, ROCKS, SLAMS, SWINGS
 from enemy import MeleeEnemy
 from geometry import (box_points, circle_intersects_polygon, circle_points, draw_boss_warning,
                       draw_sweep_warning, intersects, oriented_box)
+from sprites import CLIPS
 from stone_eruption import StoneEruption
 
 
@@ -172,6 +173,7 @@ class OrcBoss(MeleeEnemy):
 
     def recover(self):
         self.state, self.age, self.moving = 'recovery', 0.0, False
+        self.visual_time = 0.0
 
     def update(self):
         dt = game_framework.frame_time
@@ -216,21 +218,28 @@ class OrcBoss(MeleeEnemy):
             self.state, self.age, self.visual_time = 'idle', 0.0, 0.0
 
     def pose(self):
+        clip = CLIPS['boss', self.pattern]
+        windup, active, *follow_through = clip['phases']
         if self.state == 'windup':
-            return self.pattern, min(3, 4 * self.age / ATTACKS[self.pattern]['windup_s'])
+            progress = self.age / ATTACKS[self.pattern]['windup_s']
+            return self.pattern, min(windup - 1, int(windup * progress))
         if self.state == 'charge':
-            return 'charge', 4 + int(self.visual_time * 18) % 8
+            return 'charge', windup + int(self.visual_time * clip['fps']) % active
         if self.state == 'swing':
-            return 'swing', min(7, 4 + 4 * self.age / SWING['swing_s'])
+            return 'swing', windup + min(active - 1, int(active * self.age / SWING['swing_s']))
         if self.state == 'rocks':
-            return 'slam', min(7, 4 + self.age * 16)
+            return 'slam', windup + min(active - 1, int(self.age * clip['fps']))
         if self.state == 'recovery':
             if self.pattern == 'charge':
+                if self.age >= CHARGE['recovery_motion_s']:
+                    return 'idle', None
                 action = 'stagger' if self.staggered else 'recover'
-                return action, 7 * self.age / CHARGE['recovery_s']
+                frames = CLIPS['boss', action]['frames']
+                return action, int(frames * self.age / CHARGE['recovery_motion_s'])
             progress = self.age / ATTACKS[self.pattern]['recovery_s']
-            return self.pattern, min(11, 8 + 4 * progress)
-        return ('walk', int(self.visual_time * 10) % 8) if self.moving else ('idle', None)
+            frames = follow_through[0]
+            return self.pattern, windup + active + min(frames - 1, int(frames * progress))
+        return ('walk', None) if self.moving else ('idle', None)
 
     def draw_warning(self):
         camera = self.player.camera
